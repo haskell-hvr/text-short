@@ -1,5 +1,7 @@
+cabal-version:       1.12
+
 name:                text-short
-version:             0.1
+version:             0.1.1
 synopsis:            Memory-efficient representation of Unicode text strings
 license:             BSD3
 license-file:        LICENSE
@@ -8,7 +10,6 @@ maintainer:          hvr@gnu.org
 bug-reports:         https://github.com/hvr/text-short/issues
 category:            Data
 build-type:          Simple
-cabal-version:       >=1.10
 description:         This package provides the 'ShortText' type which is suitable for keeping many short strings in memory. This is similiar to how 'ShortByteString' relates to 'ByteString'.
                      .
                      The main difference between 'Text' and 'ShortText' is that 'ShortText' uses UTF-8 instead of UTF-16 internally and also doesn't support slicing (thereby saving 2 words). Consequently, the memory footprint of a (boxed) 'ShortText' value is 4 words (2 words when unboxed) plus the length of the UTF-8 encoded payload.
@@ -21,7 +22,12 @@ Source-Repository head
 
 library
   default-language:    Haskell2010
+
   exposed-modules:     Data.Text.Short
+                       Data.Text.Short.Unsafe
+
+  other-modules:       Data.Text.Short.Internal
+
   build-depends:       base        >= 4.7    && < 4.11
                      , bytestring  >= 0.10.4 && < 0.11
                      , hashable    >= 1.2.6  && < 1.3
@@ -40,6 +46,7 @@ library
                      , MagicHash
                      , UnliftedFFITypes
                      , Trustworthy
+                     , Unsafe
 
   c-sources: cbits/cbits.c
   ghc-options: -Wall
