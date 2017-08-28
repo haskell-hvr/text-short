@@ -4,6 +4,6 @@
 
 * First version. Released on an unsuspecting world.
 
-## 0.2
+## 0.1.1
 
-* Expose constructor in `Data.Text.Short.Internal` module
+* Expose *unsafe* conversion API via `Data.Text.Short.Unsafe` module

@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, MagicHash, UnliftedFFITypes, Trustworthy #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, MagicHash, UnliftedFFITypes, Unsafe #-}
 
 -- |
 -- Module      : Data.Text.Short.Internal
@@ -29,9 +29,11 @@ module Data.Text.Short.Internal
 
       -- ** 'BS.ByteString'
     , fromShortByteString
+    , fromShortByteStringUnsafe
     , toShortByteString
 
     , fromByteString
+    , fromByteStringUnsafe
     , toByteString
 
     , toBuilder
@@ -170,7 +172,7 @@ fromString = ShortText . encodeStringShort utf8 . map r
 -- This is currently not /O(1)/ because currently 'T.Text' uses UTF-16 as its internal representation.
 -- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become /O(1)/.
 fromText :: T.Text -> ShortText
-fromText = fromByteString' . T.encodeUtf8
+fromText = fromByteStringUnsafe . T.encodeUtf8
 
 -- | /O(n)/ Construct 'ShortText' from UTF-8 encoded 'ShortByteString'
 --
@@ -185,19 +187,30 @@ fromShortByteString sbs
   where
     st = ShortText sbs
 
+-- | /O(1)/ Construct 'ShortText' from UTF-8 encoded 'ShortByteString'
+--
+-- __WARNING__: Unlike the safe 'fromShortByteString' conversion, this
+-- conversion is /unsafe/ as it doesn't validate the well-formedness of the
+-- UTF-8 encoding.
+fromShortByteStringUnsafe :: ShortByteString -> ShortText
+fromShortByteStringUnsafe = ShortText
+
 -- | /O(n)/ Construct 'ShortText' from UTF-8 encoded 'BS.ByteString'
 --
 -- Returns 'Nothing' in case of invalid UTF-8 encoding.
 fromByteString :: BS.ByteString -> Maybe ShortText
 fromByteString = fromShortByteString . BSS.toShort
 
-----------------------------------------------------------------------------
-
--- non-validating
-fromByteString' :: BS.ByteString -> ShortText
-fromByteString' = ShortText . BSS.toShort
-
-
+-- | /O(n)/ Construct 'ShortText' from UTF-8 encoded 'BS.ByteString'
+--
+-- This operation is /O(n)/ because the 'BS.ByteString' needs to be
+-- copied into an unpinned 'ByteArray#'.
+--
+-- __WARNING__: Unlike the safe 'fromByteString' conversion, this
+-- conversion is /unsafe/ as it doesn't validate the well-formedness of the
+-- UTF-8 encoding.
+fromByteStringUnsafe :: BS.ByteString -> ShortText
+fromByteStringUnsafe = ShortText . BSS.toShort
 
 ----------------------------------------------------------------------------
 

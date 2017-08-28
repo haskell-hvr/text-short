@@ -1,3 +1,4 @@
+{-# LANGUAGE Trustworthy #-}
 -- |
 -- Module      : Data.Text.Short
 -- Copyright   : © Herbert Valerio Riedel 2017
