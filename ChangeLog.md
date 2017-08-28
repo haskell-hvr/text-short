@@ -7,3 +7,4 @@
 ## 0.1.1
 
 * Expose *unsafe* conversion API via `Data.Text.Short.Unsafe` module
+* Minor documentation improvement

@@ -103,17 +103,17 @@ instance Binary ShortText where
           Just st -> return st
 #endif
 
--- | /O(1)/ Test whether a 'ShortText' is empty.
+-- | \(\mathcal{O}(1)\) Test whether a 'ShortText' is empty.
 null :: ShortText -> Bool
 null = BSS.null . toShortByteString
 
--- | /O(n)/ Count the number of Unicode code-points in a 'ShortText'.
+-- | \(\mathcal{O}(n)\) Count the number of Unicode code-points in a 'ShortText'.
 length :: ShortText -> Int
 length st = fromIntegral $ unsafePerformIO (c_text_short_length (toByteArray# st) (toCSize st))
 
 foreign import ccall unsafe "hs_text_short_length" c_text_short_length :: ByteArray# -> CSize -> IO CSize
 
--- | /O(n)/ Test whether 'ShortText' contains only ASCII code-points (i.e. only U+0000 through U+007F).
+-- | \(\mathcal{O}(n)\) Test whether 'ShortText' contains only ASCII code-points (i.e. only U+0000 through U+007F).
 isAscii :: ShortText -> Bool
 isAscii st = (== sz) $ unsafePerformIO (c_text_short_is_ascii (toByteArray# st) sz)
   where
@@ -129,13 +129,13 @@ toCSize = fromIntegral . BSS.length . toShortByteString
 toByteArray# :: ShortText -> ByteArray#
 toByteArray# (ShortText (BSSI.SBS ba#)) = ba#
 
--- | /O(0)/ Converts to UTF-8 encoded 'ShortByteString'
+-- | \(\mathcal{O}(0)\) Converts to UTF-8 encoded 'ShortByteString'
 --
 -- This operation has effectively no overhead, as it's currently merely a @newtype@-cast.
 toShortByteString :: ShortText -> ShortByteString
 toShortByteString (ShortText b) = b
 
--- | /O(n)/ Converts to UTF-8 encoded 'BS.ByteString'
+-- | \(\mathcal{O}(n)\) Converts to UTF-8 encoded 'BS.ByteString'
 toByteString :: ShortText -> BS.ByteString
 toByteString = BSS.fromShort . toShortByteString
 
@@ -143,20 +143,20 @@ toByteString = BSS.fromShort . toShortByteString
 toBuilder :: ShortText -> BB.Builder
 toBuilder = BB.shortByteString . toShortByteString
 
--- | /O(n)/ Convert to 'String'
+-- | \(\mathcal{O}(n)\) Convert to 'String'
 toString :: ShortText -> String
 toString = decodeStringShort' utf8 . toShortByteString
 
--- | /O(n)/ Convert to 'T.Text'
+-- | \(\mathcal{O}(n)\) Convert to 'T.Text'
 --
--- This is currently not /O(1)/ because currently 'T.Text' uses UTF-16 as its internal representation.
--- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become /O(1)/.
+-- This is currently not \(\mathcal{O}(1)\) because currently 'T.Text' uses UTF-16 as its internal representation.
+-- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become \(\mathcal{O}(1)\).
 toText :: ShortText -> T.Text
 toText = T.decodeUtf8 . toByteString
 
 ----
 
--- | /O(n)/ Construct/pack from 'String'
+-- | \(\mathcal{O}(n)\) Construct/pack from 'String'
 --
 -- Note: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
 fromString :: String -> ShortText
@@ -167,17 +167,17 @@ fromString = ShortText . encodeStringShort utf8 . map r
       where
         x = ord c
 
--- | /O(n)/ Construct 'ShortText' from 'T.Text'
+-- | \(\mathcal{O}(n)\) Construct 'ShortText' from 'T.Text'
 --
--- This is currently not /O(1)/ because currently 'T.Text' uses UTF-16 as its internal representation.
--- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become /O(1)/.
+-- This is currently not \(\mathcal{O}(1)\) because currently 'T.Text' uses UTF-16 as its internal representation.
+-- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become \(\mathcal{O}(1)\).
 fromText :: T.Text -> ShortText
 fromText = fromByteStringUnsafe . T.encodeUtf8
 
--- | /O(n)/ Construct 'ShortText' from UTF-8 encoded 'ShortByteString'
+-- | \(\mathcal{O}(n)\) Construct 'ShortText' from UTF-8 encoded 'ShortByteString'
 --
 -- This operation doesn't copy the input 'ShortByteString' but it
--- cannot be /O(1)/ because we need to validate the UTF-8 encoding.
+-- cannot be \(\mathcal{O}(1)\) because we need to validate the UTF-8 encoding.
 --
 -- Returns 'Nothing' in case of invalid UTF-8 encoding.
 fromShortByteString :: ShortByteString -> Maybe ShortText
@@ -187,7 +187,9 @@ fromShortByteString sbs
   where
     st = ShortText sbs
 
--- | /O(1)/ Construct 'ShortText' from UTF-8 encoded 'ShortByteString'
+-- | \(\mathcal{O}(0)\) Construct 'ShortText' from UTF-8 encoded 'ShortByteString'
+--
+-- This operation has effectively no overhead, as it's currently merely a @newtype@-cast.
 --
 -- __WARNING__: Unlike the safe 'fromShortByteString' conversion, this
 -- conversion is /unsafe/ as it doesn't validate the well-formedness of the
@@ -195,15 +197,15 @@ fromShortByteString sbs
 fromShortByteStringUnsafe :: ShortByteString -> ShortText
 fromShortByteStringUnsafe = ShortText
 
--- | /O(n)/ Construct 'ShortText' from UTF-8 encoded 'BS.ByteString'
+-- | \(\mathcal{O}(n)\) Construct 'ShortText' from UTF-8 encoded 'BS.ByteString'
 --
 -- Returns 'Nothing' in case of invalid UTF-8 encoding.
 fromByteString :: BS.ByteString -> Maybe ShortText
 fromByteString = fromShortByteString . BSS.toShort
 
--- | /O(n)/ Construct 'ShortText' from UTF-8 encoded 'BS.ByteString'
+-- | \(\mathcal{O}(n)\) Construct 'ShortText' from UTF-8 encoded 'BS.ByteString'
 --
--- This operation is /O(n)/ because the 'BS.ByteString' needs to be
+-- This operation is \(\mathcal{O}(n)\) because the 'BS.ByteString' needs to be
 -- copied into an unpinned 'ByteArray#'.
 --
 -- __WARNING__: Unlike the safe 'fromByteString' conversion, this
