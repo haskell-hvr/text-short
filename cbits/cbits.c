@@ -138,4 +138,5 @@ hs_text_short_is_ascii(const uint8_t buf[], const size_t n)
   for (j = 0; j < n; j++)
     if (buf[j] & 0x80)
       return j;
+  return j;
 }
