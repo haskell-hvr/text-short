@@ -22,8 +22,6 @@ Source-Repository head
     Location:          https://github.com/hvr/text-short.git
 
 library
-  default-language:    Haskell2010
-
   exposed-modules:     Data.Text.Short
                        Data.Text.Short.Unsafe
 
