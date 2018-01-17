@@ -60,9 +60,13 @@ Valid code-points:
 
 Return values:
 
- 0 -> ok
- 1 -> invalid byte/code-point
- 2 -> truncated
+  0 -> ok
+
+  1 -> invalid byte/code-point
+
+ -1 -> truncated (1 byte missing)
+ -2 -> truncated (2 byte missing)
+ -3 -> truncated (3 byte missing)
 
 */
 
@@ -75,50 +79,80 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
     const uint8_t b0 = buf[j++];
 
     if (!(b0 & 0x80))
-      continue;
+      continue; /* b0 elem [ 0x00 .. 0x7f ] */
 
-    if ((b0 & 0xe0) == 0xc0) {
-      if (!(b0 & 0x1e)) return 1; /* denorm */
-      if (j >= n) return 2;
-      
+    if ((b0 & 0xe0) == 0xc0) { /* [ 0xc0 .. 0xdf ] */
+      if (!(b0 & 0x1e)) return 1; /* 0xc0 or 0xc1; denorm */
+      if (j >= n) return -1;
+
       /* b1 */
       if ((buf[j++] & 0xc0) != 0x80) return 1;
+      /* b1 elem [ 0x80 .. 0xbf ] */
+
       continue;
     }
 
-    if ((b0 & 0xf0) == 0xe0) {
-      if ((j+1) >= n) return 2;
+    if ((b0 & 0xf0) == 0xe0) { /* [ 0xe0 .. 0xef ] */
+      if ((j+1) >= n) return (n-(j+2));
 
       const uint8_t b1 = buf[j++];
-      if ((b1 & 0xc0) != 0x80) return 1;
+      if ((b1 & 0xc0) != 0x80) return 1; /* b1 elem [ 0x80 .. 0xbf ] */
+
+      /* if b0==0xe0: b1 elem [ 0xa0 .. 0xbf ] */
       if (!((b0 & 0x0f) | (b1 & 0x20))) return 1; /* denorm */
+
       /* UTF16 Surrogate pairs [U+D800 .. U+DFFF] */
+      /* if b0==0xed: b1 elem [ 0x80 .. 0x9f ] */
       if ((b0 == 0xed) && (b1 & 0x20)) return 1;
-      
+
       /* b2 */
       if ((buf[j++] & 0xc0) != 0x80) return 1;
-        
+      /* b2 elem [ 0x80 .. 0xbf ] */
+
       continue;
     }
 
-    if ((b0 & 0xf8) == 0xf0) {
-      if ((j+2) >= n) return 2;
-      
+    if ((b0 & 0xfc) == 0xf0) { /* [ 0xf0 .. 0xf3 ] */
+      if ((j+2) >= n) return (n-(j+3));
+
       const uint8_t b1 = buf[j++];
-      if ((b1 & 0xc0) != 0x80) return 1;
-      if (!((b0 & 0x07) | (b1 & 0x30))) return 1; /* denorm */
-      /* make sure we're below U+10FFFF */
-      if (b0 > 0xf4) return 1;
-      if ((b0 == 0xf4) && (b1 & 0x30)) return 1;
-      
+
+      if ((b1 & 0xc0) != 0x80)         /* b1 elem [ 0x80 .. 0xbf ] */
+        return 1;
+
+      if (!((b0 & 0x03) | (b1 & 0x30))) /* if b0==0xf0: b1 elem [ 0x90 .. 0xbf ] */
+        return 1;
+
       /* b2 */
       if ((buf[j++] & 0xc0) != 0x80) return 1;
+      /* b2 elem [ 0x80 .. 0xbf ] */
+
       /* b3 */
       if ((buf[j++] & 0xc0) != 0x80) return 1;
+      /* b3 elem [ 0x80 .. 0xbf ] */
 
       continue;
     }
-    
+
+    if (b0 == 0xf4) {
+      if ((j+2) >= n) return (n-(j+3));
+
+      /* b1 */
+      if ((buf[j++] & 0x80) != 0x80) return 1;
+      /* b1 elem [ 0x80 .. 0x8f ] */
+
+      /* b2 */
+      if ((buf[j++] & 0xc0) != 0x80) return 1;
+      /* b2 elem [ 0x80 .. 0xbf ] */
+
+      /* b3 */
+      if ((buf[j++] & 0xc0) != 0x80) return 1;
+      /* b3 elem [ 0x80 .. 0xbf ] */
+
+      continue;
+    }
+
+    /* invalid b0 byte */
     return 1;
   }
 
