@@ -34,12 +34,35 @@
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
+#include <HsFFI.h>
+
+#if !defined(SIZEOF_VOID_P)
+# error <HsFFI.h> SIZEOF_VOID_P not defined
+#endif
+
+#if (SIZEOF_VOID_P) == 8
+const static int is_64bit = 1;
+#elif (SIZEOF_VOID_P) == 4
+const static int is_64bit = 0;
+#else
+# error unexpected SIZEOF_VOID_P value
+#endif
+
+#if (WORDS_BIGENDIAN)
+const static int is_bigendian = 1;
+#else
+const static int is_bigendian = 0;
+#endif
+
 
 /* Count number of code-points in well-formed utf8 string */
 size_t
 hs_text_short_length(const uint8_t buf[], const size_t n)
 {
-  size_t j,l = 0;
+  size_t j = 0;
+  size_t l = 0;
+
+  /* Both GCC & Clang are able to optimise the code below quite well at -O3 */
   for (j = 0; j < n; j++)
     if ((buf[j] & 0xc0) != 0x80)
       l++;
@@ -148,15 +171,14 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
 }
 
 
-/* Test whether well-formed UTF8 string contains only ASCII code-points
- * Returns length of longest ASCII-code-point prefix.
+/* Returns length of longest ASCII-code-point prefix.
  */
 size_t
-hs_text_short_is_ascii(const uint8_t buf[], const size_t n)
+hs_text_short_ascii_length(const uint8_t buf[], const size_t n)
 {
   size_t j = 0;
 
-  if (sizeof(long) == 8) {
+  if (is_64bit) {
     /* "vectorized" optimisation checking 8 octets at once
      *
      * NB: A 64-bit aligned buffer is assumed. This is assumption is
@@ -167,6 +189,13 @@ hs_text_short_is_ascii(const uint8_t buf[], const size_t n)
     for (; (j+7) < n; j+=8, ++buf64)
       if (*buf64 & UINT64_C(0x8080808080808080))
         break;
+  } else {
+    /* "vectorized" optimisation checking 4 octets at once */
+    const uint32_t *buf32 = (const uint32_t*)buf;
+
+    for (; (j+3) < n; j+=4, ++buf32)
+      if (*buf32 & UINT64_C(0x80808080))
+        break;
   }
 
   for (; j < n; ++j)
@@ -174,4 +203,54 @@ hs_text_short_is_ascii(const uint8_t buf[], const size_t n)
       return j;
 
   return j;
+}
+
+/* Test whether well-formed UTF8 string contains only ASCII code-points
+ * returns 0 if not ASCII
+ *
+ * This code assumes a naturally aligned buf[]
+ */
+int
+hs_text_short_is_ascii(const uint8_t buf[], const size_t n)
+{
+  size_t j = 0;
+
+  if (n < 2)
+    return 1;
+
+  if (is_64bit) {
+    /* "vectorized" optimisation checking 8 octets at once
+     *
+     * NB: A 64-bit aligned buffer is assumed. This is assumption is
+     * justified when the buffer is the payload of a `ByteArray#`.
+     *
+     */
+    const uint64_t *buf64 = (const uint64_t*)buf;
+
+    for (; (j+7) < n; j+=8, ++buf64)
+      if (*buf64 & UINT64_C(0x8080808080808080))
+        return 0;
+
+    if (j < n) {
+      const int maskshift = (8 - (n - j)) << 3;
+      const uint64_t mask = is_bigendian ? (UINT64_C(0x8080808080808080) << maskshift)  /* big endian */
+                                         : (UINT64_C(0x8080808080808080) >> maskshift); /* little endian */
+
+      if (*buf64 & mask)
+        return 0;
+    }
+  } else {
+    /* "vectorized" optimisation checking 4 octets at once */
+    const uint32_t *buf32 = (const uint32_t*)buf;
+
+    for (; (j+3) < n; j+=4, ++buf32)
+      if (*buf32 & UINT64_C(0x80808080))
+        return 0;
+
+    for (; j < n; ++j)
+      if (buf[j] & 0x80)
+        return 0;
+  }
+
+  return 1;
 }

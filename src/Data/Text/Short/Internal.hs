@@ -115,11 +115,11 @@ foreign import ccall unsafe "hs_text_short_length" c_text_short_length :: ByteAr
 
 -- | \(\mathcal{O}(n)\) Test whether 'ShortText' contains only ASCII code-points (i.e. only U+0000 through U+007F).
 isAscii :: ShortText -> Bool
-isAscii st = (== sz) $ unsafePerformIO (c_text_short_is_ascii (toByteArray# st) sz)
+isAscii st = (/= 0) $ unsafePerformIO (c_text_short_is_ascii (toByteArray# st) sz)
   where
     sz = toCSize st
 
-foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: ByteArray# -> CSize -> IO CSize
+foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: ByteArray# -> CSize -> IO CInt
 
 ----------------------------------------------------------------------------
 
