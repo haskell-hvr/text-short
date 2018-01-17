@@ -134,9 +134,24 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
 size_t
 hs_text_short_is_ascii(const uint8_t buf[], const size_t n)
 {
-  size_t j;
-  for (j = 0; j < n; j++)
+  size_t j = 0;
+
+  if (sizeof(long) == 8) {
+    /* "vectorized" optimisation checking 8 octets at once
+     *
+     * NB: A 64-bit aligned buffer is assumed. This is assumption is
+     * justified when the buffer is the payload of a `ByteArray#`.
+     */
+    const uint64_t *buf64 = (const uint64_t*)buf;
+
+    for (; (j+7) < n; j+=8, ++buf64)
+      if (*buf64 & UINT64_C(0x8080808080808080))
+        break;
+  }
+
+  for (; j < n; ++j)
     if (buf[j] & 0x80)
       return j;
+
   return j;
 }
