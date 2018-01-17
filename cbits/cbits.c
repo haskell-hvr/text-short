@@ -85,11 +85,7 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
       if (!(b0 & 0x1e)) return 1; /* 0xc0 or 0xc1; denorm */
       if (j >= n) return -1;
 
-      /* b1 */
-      if ((buf[j++] & 0xc0) != 0x80) return 1;
-      /* b1 elem [ 0x80 .. 0xbf ] */
-
-      continue;
+      goto l_trail1; /* b1 */
     }
 
     if ((b0 & 0xf0) == 0xe0) { /* [ 0xe0 .. 0xef ] */
@@ -105,11 +101,7 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
       /* if b0==0xed: b1 elem [ 0x80 .. 0x9f ] */
       if ((b0 == 0xed) && (b1 & 0x20)) return 1;
 
-      /* b2 */
-      if ((buf[j++] & 0xc0) != 0x80) return 1;
-      /* b2 elem [ 0x80 .. 0xbf ] */
-
-      continue;
+      goto l_trail1; /* b2 */
     }
 
     if ((b0 & 0xfc) == 0xf0) { /* [ 0xf0 .. 0xf3 ] */
@@ -123,28 +115,22 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
       if (!((b0 & 0x03) | (b1 & 0x30))) /* if b0==0xf0: b1 elem [ 0x90 .. 0xbf ] */
         return 1;
 
-      /* b2 */
-      if ((buf[j++] & 0xc0) != 0x80) return 1;
-      /* b2 elem [ 0x80 .. 0xbf ] */
-
-      /* b3 */
-      if ((buf[j++] & 0xc0) != 0x80) return 1;
-      /* b3 elem [ 0x80 .. 0xbf ] */
-
-      continue;
+      goto l_trail2; /* b1, b2 */
     }
 
     if (b0 == 0xf4) {
       if ((j+2) >= n) return (n-(j+3));
 
       /* b1 */
-      if ((buf[j++] & 0x80) != 0x80) return 1;
+      if ((buf[j++] & 0xf0) != 0x80) return 1;
       /* b1 elem [ 0x80 .. 0x8f ] */
 
+    l_trail2:
       /* b2 */
       if ((buf[j++] & 0xc0) != 0x80) return 1;
       /* b2 elem [ 0x80 .. 0xbf ] */
 
+    l_trail1:
       /* b3 */
       if ((buf[j++] & 0xc0) != 0x80) return 1;
       /* b3 elem [ 0x80 .. 0xbf ] */
