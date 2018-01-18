@@ -94,9 +94,6 @@ script:
   - cabal new-build -w ${HC} ${TEST} ${BENCH} all
   - if [ "x$TEST" = "x--enable-tests" ]; then cabal new-test -w ${HC} ${TEST} ${BENCH} all; fi
 
-  # cabal check
-  - (cd text-short-* && cabal check)
-
   # haddock
   - rm -rf ./dist-newstyle
   - if $HADDOCK; then cabal new-haddock -w ${HC} ${TEST} ${BENCH} all; else echo "Skipping haddock generation";fi
