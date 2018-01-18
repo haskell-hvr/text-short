@@ -16,6 +16,7 @@ module Data.Text.Short
     , null
     , length
     , isAscii
+    , splitAt
 
       -- * Conversions
       -- ** 'String'
@@ -37,5 +38,5 @@ module Data.Text.Short
 
     ) where
 
-import Data.Text.Short.Internal
-import Prelude ()
+import           Data.Text.Short.Internal
+import           Prelude                  ()

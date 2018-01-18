@@ -1,4 +1,10 @@
-{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, MagicHash, UnliftedFFITypes, Unsafe #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MagicHash                  #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE UnboxedTuples              #-}
+{-# LANGUAGE UnliftedFFITypes           #-}
+{-# LANGUAGE Unsafe                     #-}
 
 -- |
 -- Module      : Data.Text.Short.Internal
@@ -17,6 +23,7 @@ module Data.Text.Short.Internal
     , Data.Text.Short.Internal.null
     , Data.Text.Short.Internal.length
     , Data.Text.Short.Internal.isAscii
+    , Data.Text.Short.Internal.splitAt
 
       -- * Conversions
       -- ** 'String'
@@ -40,25 +47,29 @@ module Data.Text.Short.Internal
 
     ) where
 
-import           Control.DeepSeq (NFData)
+import           Control.DeepSeq                (NFData)
 -- import           Control.Exception as E
-import qualified Data.ByteString as BS
-import           Data.ByteString.Short (ShortByteString)
-import qualified Data.ByteString.Short as BSS
+import           Data.Binary
+import qualified Data.ByteString                as BS
+import qualified Data.ByteString.Builder        as BB
+import           Data.ByteString.Short          (ShortByteString)
+import qualified Data.ByteString.Short          as BSS
 import qualified Data.ByteString.Short.Internal as BSSI
 import           Data.Char
-import           Data.Hashable (Hashable)
+import           Data.Hashable                  (Hashable)
 import           Data.Semigroup
-import qualified Data.String as S
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
+import qualified Data.String                    as S
+import qualified Data.Text                      as T
+import qualified Data.Text.Encoding             as T
 import           Foreign.C
-import           GHC.Exts (ByteArray#)
-import qualified GHC.Foreign as GHC
+import           GHC.Exts                       (ByteArray#, Int (I#),
+                                                 MutableByteArray#,
+                                                 copyByteArray#, newByteArray#,
+                                                 unsafeFreezeByteArray#)
+import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
+import           GHC.ST
 import           System.IO.Unsafe
-import Data.Binary
-import qualified Data.ByteString.Builder as BB
 
 -- | A compact representation of Unicode strings.
 --
@@ -239,6 +250,74 @@ isValidUtf8 :: ShortText -> Bool
 isValidUtf8 st = (==0) $ unsafePerformIO (c_text_short_is_valid_utf8 (toByteArray# st) (toCSize st))
 
 foreign import ccall unsafe "hs_text_short_is_valid_utf8" c_text_short_is_valid_utf8 :: ByteArray# -> CSize -> IO CInt
+
+-- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
+--
+-- @'splitAt' n t@ returns a pair of 'ShortText' with the following properties:
+--
+-- prop> length (fst (split n t)) == min (length t) (max 0 n)
+--
+-- prop> fst (split n t) <> snd (split n t) == t
+--
+-- @since TBD
+splitAt :: Int -> ShortText -> (ShortText,ShortText)
+splitAt i st
+  | i    <= 0    = (mempty,st)
+  | len2 <= 0    = (st,mempty)
+  | otherwise    = (slice st 0 ofs, slice st ofs len2)
+  where
+    ofs   = unsafePerformIO (c_text_short_index_ofs (toByteArray# st) stsz (fromIntegral i))
+    stsz  = toCSize st
+    len2  = stsz-ofs
+
+foreign import ccall unsafe "hs_text_short_index_ofs" c_text_short_index_ofs :: ByteArray# -> CSize -> CSize -> IO CSize
+
+----------------------------------------------------------------------------
+
+-- | Construct a new 'ShortText' from an existing one by slicing
+--
+-- NB: The 'CSize' arguments refer to byte-offsets
+slice :: ShortText -> CSize -> CSize -> ShortText
+slice (ShortText x) ofs_ len_ = ShortText (sliceSBS x (fromIntegral ofs_) (fromIntegral len_))
+  where
+    sliceSBS :: ShortByteString -> Int -> Int -> ShortByteString
+    sliceSBS sbs@(BSSI.SBS ba#) ofs len
+      | ofs < 0    = error "invalid offset"
+      | len < 0    = error "invalid length"
+      | len' == 0  = mempty
+      | otherwise  = createSBS len' go
+      where
+        len0 = BSS.length sbs
+        len' = max 0 (min len (len0-ofs))
+        ofs' = max 0 ofs
+
+        go :: MBA s -> ST s ()
+        go (MBA# mba#) = ST $ \s -> case copyByteArray# ba# (toI ofs') mba# 0# (toI len') s of
+                                      s' -> (# s', () #)
+
+        toI (I# i#) = i#
+
+----------------------------------------------------------------------------
+-- low-level MutableByteArray# helpers
+
+data MBA s = MBA# (MutableByteArray# s)
+
+createSBS :: Int -> (forall s. MBA s -> ST s ()) -> ShortByteString
+createSBS n go = runST $ do
+  mba <- newByteArray n
+  go mba
+  unsafeFreezeSBS mba
+
+unsafeFreezeSBS :: MBA s -> ST s ShortByteString
+unsafeFreezeSBS (MBA# mba#)
+  = ST $ \s -> case unsafeFreezeByteArray# mba# s of
+                 (# s', ba# #) -> (# s', BSSI.SBS ba# #)
+
+newByteArray :: Int -> ST s (MBA s)
+newByteArray (I# n#)
+  = ST $ \s -> case newByteArray# n# s of
+                 (# s', mba# #) -> (# s', MBA# mba# #)
+
 
 {- TODO:
 {-# RULES "ShortText strlit" forall s . fromString (unpackCString# s) = fromAddr# #-}

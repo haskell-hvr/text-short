@@ -2,17 +2,18 @@
 
 module Main(main) where
 
-import qualified Data.Text.Short as IUT
-import Test.Tasty
-import Test.Tasty.QuickCheck as QC
-import Test.Tasty.HUnit
-import Test.QuickCheck.Instances ()
-import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
-import qualified Data.String as D.S
-import Data.Binary
-import Data.Char
-import Data.Monoid
+import           Data.Binary
+import           Data.Char
+import           Data.Maybe
+import           Data.Monoid
+import qualified Data.String               as D.S
+import qualified Data.Text                 as T
+import qualified Data.Text.Encoding        as T
+import qualified Data.Text.Short           as IUT
+import           Test.QuickCheck.Instances ()
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Test.Tasty.QuickCheck     as QC
 
 fromByteStringRef = either (const Nothing) (Just . IUT.fromText) . T.decodeUtf8'
 
@@ -32,6 +33,9 @@ qcProps = testGroup "Properties"
   , QC.testProperty "toString.fromString" $ \s -> (IUT.toString . IUT.fromString) s == s
   , QC.testProperty "isAscii"  $ \s -> IUT.isAscii (IUT.fromString s) == all isAscii s
   , QC.testProperty "isAscii2" $ \t -> IUT.isAscii (IUT.fromText t)   == T.all isAscii t
+  , QC.testProperty "splitAt" $ \t -> let t' = IUT.fromText t
+                                          mapBoth f (x,y) = (f x, f y)
+                                      in and [ mapBoth IUT.toText (IUT.splitAt i t') == T.splitAt i t | i <- [-5 .. 5+T.length t ] ]
   ]
 
 unitTests = testGroup "Unit-tests"

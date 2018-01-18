@@ -70,6 +70,48 @@ hs_text_short_length(const uint8_t buf[], const size_t n)
   return l;
 }
 
+/* Locate offset of j-th code-point in well-formed utf8 string
+ *
+ */
+size_t
+hs_text_short_index_ofs(const uint8_t buf[], const size_t n, const size_t i)
+{
+  size_t m = 0;
+  size_t j = 0;
+
+  for (;;) {
+    if (j >= i)
+      return m;
+
+    const size_t rest = n-m;
+
+    if (rest < (i-j))
+      return n;
+
+    const uint8_t b0 = buf[m];
+
+    if (!(b0 & 0x80))
+      m += 1;   /* 0_______ */
+    else
+      switch(b0 >> 4) {
+      case 0xf: /* 11110___ */
+        m += 4;
+        break;
+      case 0xe: /* 1110____ */
+        m += 3;
+        break;
+      default:  /* 110_____ */
+        m += 2;
+        break;
+      }
+
+    j += 1;
+  }
+
+  assert(0);
+}
+
+
 /* Validate UTF8 encoding
 
  7 bits | 0xxxxxxx
