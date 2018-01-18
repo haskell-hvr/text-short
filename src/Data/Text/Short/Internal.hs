@@ -24,6 +24,7 @@ module Data.Text.Short.Internal
     , Data.Text.Short.Internal.length
     , Data.Text.Short.Internal.isAscii
     , Data.Text.Short.Internal.splitAt
+    , (!?)
 
       -- * Conversions
       -- ** 'String'
@@ -250,6 +251,21 @@ isValidUtf8 :: ShortText -> Bool
 isValidUtf8 st = (==0) $ unsafePerformIO (c_text_short_is_valid_utf8 (toByteArray# st) (toCSize st))
 
 foreign import ccall unsafe "hs_text_short_is_valid_utf8" c_text_short_is_valid_utf8 :: ByteArray# -> CSize -> IO CInt
+
+-- | \(\mathcal{O}(n)\) Index /i/-th code-point in 'ShortText'.
+--
+-- Returns 'Nothing' if out of bounds.
+--
+-- @since TBD
+(!?) :: ShortText -> Int -> Maybe Char
+(!?) st i
+  | i < 0         = Nothing
+  | cp < 0x110000 = Just (chr (fromIntegral cp))
+  | otherwise     = Nothing
+  where
+    cp = unsafePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
+
+foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteArray# -> CSize -> CSize -> IO Word32
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
 --

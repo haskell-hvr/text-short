@@ -16,6 +16,7 @@ module Data.Text.Short
     , null
     , length
     , isAscii
+    , (!?)
     , splitAt
 
       -- * Conversions

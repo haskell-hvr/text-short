@@ -111,6 +111,61 @@ hs_text_short_index_ofs(const uint8_t buf[], const size_t n, const size_t i)
   assert(0);
 }
 
+/* Decode UTF8 code units into code-point
+ * Assumes buf[] points to start of a valid UTF8-encoded code-point
+ */
+static inline uint32_t
+hs_text_short_decode_cp(const uint8_t buf[])
+{
+  /*  7 bits | 0xxxxxxx
+   * 11 bits | 110yyyyx  10xxxxxx
+   * 16 bits | 1110yyyy  10yxxxxx  10xxxxxx
+   * 21 bits | 11110yyy  10yyxxxx  10xxxxxx  10xxxxxx
+   */
+
+  const uint8_t b0 = buf[0];
+
+  if (!(b0 & 0x80))
+    return b0;
+
+  uint32_t cp = 0;
+
+  switch(b0 >> 4) {
+  case 0xf: /* 11110___ */
+    cp  = ((uint32_t)(b0 & 0x07)) << (6+6+6);
+    cp |= ((uint32_t)(buf[1] & 0x3f)) << (6+6);
+    cp |= ((uint32_t)(buf[2] & 0x3f)) << 6;
+    cp |=             buf[3] & 0x3f;
+    return cp;
+
+  case 0xe: /* 1110____ */
+    cp  = ((uint32_t)(b0 & 0x0f)) << (6+6);
+    cp |= ((uint32_t)(buf[1] & 0x3f)) << 6;
+    cp |=             buf[2] & 0x3f;
+    return cp;
+
+  default:  /* 110_____ */
+    cp  = ((uint32_t)(b0 & 0x1f)) << 6;
+    cp |=             buf[1] & 0x3f;
+    return cp;
+  }
+}
+
+/* Retrieve i-th code-point in (valid) UTF8 stream
+ *
+ * Returns 0xFFFFFFFF if out of bounds
+ */
+uint32_t
+hs_text_short_index_cp(const uint8_t buf[], const size_t n, const size_t i)
+{
+  const size_t ofs = hs_text_short_index_ofs(buf, n, i);
+
+  if (ofs >= n)
+    return UINT32_C(0xffffffff);
+
+  return hs_text_short_decode_cp(&buf[ofs]);
+}
+
 
 /* Validate UTF8 encoding
 
