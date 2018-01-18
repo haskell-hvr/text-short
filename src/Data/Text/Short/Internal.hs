@@ -92,7 +92,7 @@ import qualified PrimOps
 -- It can be shown that for realistic data <http://utf8everywhere.org/#asian UTF-16 has a space overhead of 50% over UTF-8>.
 --
 newtype ShortText = ShortText ShortByteString
-                  deriving (Monoid,Semigroup,Hashable,NFData)
+                  deriving (Monoid,Data.Semigroup.Semigroup,Hashable,NFData)
 
 instance Eq ShortText where
   {-# INLINE (==) #-}
