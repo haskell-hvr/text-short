@@ -27,6 +27,8 @@ qcProps :: TestTree
 qcProps = testGroup "Properties"
   [ QC.testProperty "length/fromText"   $ \t -> IUT.length (IUT.fromText t) == T.length t
   , QC.testProperty "length/fromString" $ \s -> IUT.length (IUT.fromString s) == length s
+  , QC.testProperty "compare" $ \t1 t2 -> IUT.fromText t1 `compare` IUT.fromText t2  == t1 `compare` t2
+  , QC.testProperty "(==)" $ \t1 t2 -> (IUT.fromText t1 == IUT.fromText t2)  == (t1 == t2)
   , QC.testProperty "(!?)" $ \t -> let t' = IUT.fromText t
                                    in mapMaybe (t' IUT.!?) [-5 .. 5+T.length t ] == T.unpack t
   , QC.testProperty "toText.fromText"   $ \t -> (IUT.toText . IUT.fromText) t == t

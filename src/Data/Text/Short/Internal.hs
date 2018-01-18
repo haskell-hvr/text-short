@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE CPP                        #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MagicHash                  #-}
@@ -49,7 +50,6 @@ module Data.Text.Short.Internal
     ) where
 
 import           Control.DeepSeq                (NFData)
--- import           Control.Exception as E
 import           Data.Binary
 import qualified Data.ByteString                as BS
 import qualified Data.ByteString.Builder        as BB
@@ -63,14 +63,17 @@ import qualified Data.String                    as S
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import           Foreign.C
-import           GHC.Exts                       (ByteArray#, Int (I#),
+import           GHC.Exts                       (ByteArray#, Int (I#), Int#,
                                                  MutableByteArray#,
                                                  copyByteArray#, newByteArray#,
+                                                 sizeofByteArray#,
                                                  unsafeFreezeByteArray#)
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
 import           System.IO.Unsafe
+
+import qualified PrimOps
 
 -- | A compact representation of Unicode strings.
 --
@@ -82,7 +85,35 @@ import           System.IO.Unsafe
 -- It can be shown that for realistic data <http://utf8everywhere.org/#asian UTF-16 has a space overhead of 50% over UTF-8>.
 --
 newtype ShortText = ShortText ShortByteString
-                  deriving (Eq,Ord,Monoid,Semigroup,Hashable,NFData)
+                  deriving (Monoid,Semigroup,Hashable,NFData)
+
+instance Eq ShortText where
+  {-# INLINE (==) #-}
+  (==) x y
+    | lx /= ly  = False
+    | lx ==  0  = True
+    | otherwise = case PrimOps.compareByteArrays# (toByteArray# x) 0# (toByteArray# y) 0# n# of
+                    0# -> True
+                    _  -> False
+    where
+      !lx@(I# n#) = toLength x
+      !ly = toLength y
+
+instance Ord ShortText where
+  compare t1 t2
+    | n == 0  = compare n1 n2
+    | otherwise = case PrimOps.compareByteArrays# ba1# 0# ba2# 0# n# of
+        r# | I# r# < 0 -> LT
+           | I# r# > 0 -> GT
+           | n1 < n2   -> LT
+           | n1 > n2   -> GT
+           | otherwise -> EQ
+    where
+      ba1# = toByteArray# t1
+      ba2# = toByteArray# t2
+      !n1 = toLength t1
+      !n2 = toLength t2
+      !n@(I# n#) = n1 `min` n2
 
 instance Show ShortText where
     showsPrec p (ShortText b) = showsPrec p (decodeStringShort' utf8 b)
@@ -137,6 +168,12 @@ foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: By
 
 toCSize :: ShortText -> CSize
 toCSize = fromIntegral . BSS.length . toShortByteString
+
+toLength :: ShortText -> Int
+toLength st = I# (toLength# st)
+
+toLength# :: ShortText -> Int#
+toLength# st = sizeofByteArray# (toByteArray# st)
 
 toByteArray# :: ShortText -> ByteArray#
 toByteArray# (ShortText (BSSI.SBS ba#)) = ba#
