@@ -40,6 +40,16 @@ qcProps = testGroup "Properties"
   , QC.testProperty "splitAt" $ \t -> let t' = IUT.fromText t
                                           mapBoth f (x,y) = (f x, f y)
                                       in and [ mapBoth IUT.toText (IUT.splitAt i t') == T.splitAt i t | i <- [-5 .. 5+T.length t ] ]
+
+  , QC.testProperty "isSuffixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isSuffixOf` IUT.fromText t2  == t1 `T.isSuffixOf` t2
+  , QC.testProperty "isPrefixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isPrefixOf` IUT.fromText t2  == t1 `T.isPrefixOf` t2
+
+  , QC.testProperty "splitAt/isPrefixOf" $ \t ->
+      let t' = IUT.fromText t
+      in and [ IUT.isPrefixOf (fst (IUT.splitAt i t')) t' | i <- [-5 .. 5+T.length t ] ]
+  , QC.testProperty "splitAt/isSuffixOf" $ \t ->
+      let t' = IUT.fromText t
+      in and [ IUT.isSuffixOf (snd (IUT.splitAt i t')) t' | i <- [-5 .. 5+T.length t ] ]
   ]
 
 unitTests = testGroup "Unit-tests"

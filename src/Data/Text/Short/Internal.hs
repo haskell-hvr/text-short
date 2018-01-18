@@ -26,6 +26,10 @@ module Data.Text.Short.Internal
     , Data.Text.Short.Internal.isAscii
     , Data.Text.Short.Internal.splitAt
     , (!?)
+    , isPrefixOf
+    , stripPrefix
+    , isSuffixOf
+    , stripSuffix
 
       -- * Conversions
       -- ** 'String'
@@ -324,6 +328,58 @@ splitAt i st
     len2  = stsz-ofs
 
 foreign import ccall unsafe "hs_text_short_index_ofs" c_text_short_index_ofs :: ByteArray# -> CSize -> CSize -> IO CSize
+
+
+-- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a prefix of the second 'ShortText'
+--
+-- @since TBD
+isPrefixOf :: ShortText -> ShortText -> Bool
+isPrefixOf x y
+  | lx > ly = False
+  | lx == 0 = True
+  | otherwise = case PrimOps.compareByteArrays# (toByteArray# x) 0# (toByteArray# y) 0# n# of
+                  0# -> True
+                  _  -> False
+  where
+    !lx@(I# n#) = toLength x
+    !ly = toLength y
+
+-- | \(\mathcal{O}(n)\) Strip prefix from second 'ShortText' argument.
+--
+-- Returns 'Nothing' if first argument is not a prefix of the second argument.
+--
+-- @since TBD
+stripPrefix :: ShortText -> ShortText -> Maybe ShortText
+stripPrefix pfx t
+  | isPrefixOf pfx t = Just $! snd (Data.Text.Short.Internal.splitAt (toLength pfx) t)
+  | otherwise        = Nothing
+
+-- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a suffix of the second 'ShortText'
+--
+-- @since TBD
+isSuffixOf :: ShortText -> ShortText -> Bool
+isSuffixOf x y
+  | lx > ly = False
+  | lx == 0 = True
+  | otherwise = case PrimOps.compareByteArrays# (toByteArray# x) 0# (toByteArray# y) ofs2# n# of
+                  0# -> True
+                  _  -> False
+  where
+    !(I# ofs2#) = ly - lx
+    !lx@(I# n#) = toLength x
+    !ly = toLength y
+
+-- | \(\mathcal{O}(n)\) Strip suffix from second 'ShortText' argument.
+--
+-- Returns 'Nothing' if first argument is not a suffix of the second argument.
+--
+-- @since TBD
+stripSuffix :: ShortText -> ShortText -> Maybe ShortText
+stripSuffix sfx t
+  | isSuffixOf sfx t = Just $! fst (Data.Text.Short.Internal.splitAt pfxLen t)
+  | otherwise        = Nothing
+  where
+    pfxLen = toLength t - toLength sfx
 
 ----------------------------------------------------------------------------
 

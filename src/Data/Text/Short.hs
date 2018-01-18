@@ -18,6 +18,10 @@ module Data.Text.Short
     , isAscii
     , (!?)
     , splitAt
+    , isPrefixOf
+    , stripPrefix
+    , isSuffixOf
+    , stripSuffix
 
       -- * Conversions
       -- ** 'String'
