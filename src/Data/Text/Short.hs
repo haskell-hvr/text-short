@@ -24,6 +24,9 @@ module Data.Text.Short
     , stripSuffix
 
       -- * Conversions
+      -- ** 'Char'
+    , singleton
+
       -- ** 'String'
     , fromString
     , toString

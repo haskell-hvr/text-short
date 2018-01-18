@@ -32,6 +32,9 @@ module Data.Text.Short.Internal
     , stripSuffix
 
       -- * Conversions
+      -- ** 'Char'
+    , singleton
+
       -- ** 'String'
     , Data.Text.Short.Internal.fromString
     , toString
@@ -208,6 +211,17 @@ toText :: ShortText -> T.Text
 toText = T.decodeUtf8 . toByteString
 
 ----
+
+-- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
+--
+-- Note: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
+--
+-- @since TBD
+singleton :: Char -> ShortText
+singleton c0 = fromText (T.singleton c)
+  where
+    c | 0xd800 <= ord c0, ord c0 < 0xe000 = '\xFFFD'
+      | otherwise                         = c0
 
 -- | \(\mathcal{O}(n)\) Construct/pack from 'String'
 --
