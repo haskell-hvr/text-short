@@ -6,6 +6,7 @@
 {-# LANGUAGE UnboxedTuples              #-}
 {-# LANGUAGE UnliftedFFITypes           #-}
 {-# LANGUAGE Unsafe                     #-}
+{-# LANGUAGE ViewPatterns               #-}
 
 -- |
 -- Module      : Data.Text.Short.Internal
@@ -58,6 +59,7 @@ module Data.Text.Short.Internal
 
 import           Control.DeepSeq                (NFData)
 import           Data.Binary
+import           Data.Bits
 import qualified Data.ByteString                as BS
 import qualified Data.ByteString.Builder        as BB
 import           Data.ByteString.Short          (ShortByteString)
@@ -71,10 +73,11 @@ import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import           Foreign.C
 import           GHC.Exts                       (ByteArray#, Int (I#), Int#,
-                                                 MutableByteArray#,
+                                                 MutableByteArray#, Word (W#),
                                                  copyByteArray#, newByteArray#,
                                                  sizeofByteArray#,
-                                                 unsafeFreezeByteArray#)
+                                                 unsafeFreezeByteArray#,
+                                                 writeWord8Array#)
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
@@ -212,22 +215,13 @@ toText = T.decodeUtf8 . toByteString
 
 ----
 
--- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
---
--- Note: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
---
--- @since TBD
-singleton :: Char -> ShortText
-singleton c0 = fromText (T.singleton c)
-  where
-    c | 0xd800 <= ord c0, ord c0 < 0xe000 = '\xFFFD'
-      | otherwise                         = c0
-
 -- | \(\mathcal{O}(n)\) Construct/pack from 'String'
 --
 -- Note: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
 fromString :: String -> ShortText
-fromString = ShortText . encodeStringShort utf8 . map r
+fromString []  = mempty
+fromString [c] = singleton c
+fromString s = ShortText . encodeStringShort utf8 . map r $ s
   where
     r c | 0xd800 <= x && x < 0xe000 = '\xFFFD'
         | otherwise                 = c
@@ -425,6 +419,9 @@ slice (ShortText x) ofs_ len_ = ShortText (sliceSBS x (fromIntegral ofs_) (fromI
 
 data MBA s = MBA# (MutableByteArray# s)
 
+createTS :: Int -> (forall s. MBA s -> ST s ()) -> ShortText
+createTS n go = ShortText (createSBS n go)
+
 createSBS :: Int -> (forall s. MBA s -> ST s ()) -> ShortByteString
 createSBS n go = runST $ do
   mba <- newByteArray n
@@ -440,6 +437,72 @@ newByteArray :: Int -> ST s (MBA s)
 newByteArray (I# n#)
   = ST $ \s -> case newByteArray# n# s of
                  (# s', mba# #) -> (# s', MBA# mba# #)
+
+writeWord8Array :: MBA s -> Int -> Word -> ST s ()
+writeWord8Array (MBA# mba#) (I# i#) (W# w#) =
+  ST $ \s -> case writeWord8Array# mba# i# w# s of
+               s' -> (# s', () #)
+
+----------------------------------------------------------------------------
+-- Helpers for encoding code points into UTF-8 code units
+--
+--   7 bits| <    0x80 | 0xxxxxxx
+--  11 bits| <   0x800 | 110yyyyx  10xxxxxx
+--  16 bits| < 0x10000 | 1110yyyy  10yxxxxx  10xxxxxx
+--  21 bits|           | 11110yyy  10yyxxxx  10xxxxxx  10xxxxxx
+
+-- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
+--
+-- Note: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
+--
+-- @since TBD
+singleton :: Char -> ShortText
+singleton (fromIntegral . ord -> cp)
+  | cp <    0x80  = createTS 1 $ \mba -> writeCodePoint1 mba 0 cp
+  | cp <   0x800  = createTS 2 $ \mba -> writeCodePoint2 mba 0 cp
+  | cp <  0xd800  = createTS 3 $ \mba -> writeCodePoint3 mba 0 cp
+  | cp <  0xe000  = createTS 3 $ \mba -> writeRepChar mba 0
+  | cp < 0x10000  = createTS 3 $ \mba -> writeCodePoint3 mba 0 cp
+  | otherwise     = createTS 4 $ \mba -> writeCodePoint4 mba 0 cp
+
+{-
+writeCodePoint :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint mba ofs cp
+  | cp <    0x80  = writeCodePoint1 mba ofs cp
+  | cp <   0x800  = writeCodePoint2 mba ofs cp
+  | cp <  0xd800  = writeCodePoint3 mba ofs cp
+  | cp <  0xe000  = writeRepChar mba ofs
+  | cp < 0x10000  = writeCodePoint3 mba ofs cp
+  | otherwise     = writeCodePoint4 mba ofs cp
+-}
+
+writeCodePoint1 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint1 mba ofs cp =
+  writeWord8Array mba ofs cp
+
+writeCodePoint2 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint2 mba ofs cp = do
+  writeWord8Array mba  ofs    (0xc0 .|. (cp `shiftR` 6))
+  writeWord8Array mba (ofs+1) (0x80 .|. (cp               .&. 0x3f))
+
+writeCodePoint3 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint3 mba ofs cp = do
+  writeWord8Array mba  ofs    (0xe0 .|.  (cp `shiftR` 12))
+  writeWord8Array mba (ofs+1) (0x80 .|. ((cp `shiftR` 6)  .&. 0x3f))
+  writeWord8Array mba (ofs+2) (0x80 .|. (cp               .&. 0x3f))
+
+writeCodePoint4 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint4 mba ofs cp = do
+  writeWord8Array mba  ofs    (0xf0 .|.  (cp `shiftR` 18))
+  writeWord8Array mba (ofs+1) (0x80 .|. ((cp `shiftR` 12) .&. 0x3f))
+  writeWord8Array mba (ofs+2) (0x80 .|. ((cp `shiftR` 6)  .&. 0x3f))
+  writeWord8Array mba (ofs+3) (0x80 .|. (cp               .&. 0x3f))
+
+writeRepChar :: MBA s -> Int -> ST s ()
+writeRepChar mba ofs = do
+  writeWord8Array mba ofs     0xef
+  writeWord8Array mba (ofs+1) 0xbf
+  writeWord8Array mba (ofs+2) 0xbd
 
 
 {- TODO:
