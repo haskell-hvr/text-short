@@ -23,6 +23,9 @@ module Data.Text.Short
     , isSuffixOf
     , stripSuffix
 
+    , cons
+    , snoc
+
       -- * Conversions
       -- ** 'Char'
     , singleton

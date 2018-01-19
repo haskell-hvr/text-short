@@ -44,6 +44,9 @@ qcProps = testGroup "Properties"
   , QC.testProperty "isSuffixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isSuffixOf` IUT.fromText t2  == t1 `T.isSuffixOf` t2
   , QC.testProperty "isPrefixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isPrefixOf` IUT.fromText t2  == t1 `T.isPrefixOf` t2
 
+  , QC.testProperty "cons" $ \c t -> IUT.singleton c <> IUT.fromText t == IUT.cons c (IUT.fromText t)
+  , QC.testProperty "snoc" $ \c t -> IUT.fromText t <> IUT.singleton c == IUT.snoc (IUT.fromText t) c
+
   , QC.testProperty "splitAt/isPrefixOf" $ \t ->
       let t' = IUT.fromText t
       in and [ IUT.isPrefixOf (fst (IUT.splitAt i t')) t' | i <- [-5 .. 5+T.length t ] ]

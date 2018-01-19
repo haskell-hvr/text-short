@@ -32,6 +32,9 @@ module Data.Text.Short.Internal
     , isSuffixOf
     , stripSuffix
 
+    , cons
+    , snoc
+
       -- * Conversions
       -- ** 'Char'
     , singleton
@@ -81,6 +84,7 @@ import           GHC.Exts                       (ByteArray#, Int (I#), Int#,
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
+import           Prelude                        hiding (length)
 import           System.IO.Unsafe
 
 import qualified PrimOps
@@ -395,49 +399,51 @@ stripSuffix sfx t
 --
 -- NB: The 'CSize' arguments refer to byte-offsets
 slice :: ShortText -> CSize -> CSize -> ShortText
-slice (ShortText x) ofs_ len_ = ShortText (sliceSBS x (fromIntegral ofs_) (fromIntegral len_))
+slice (ShortText (BSSI.SBS ba#)) (fromIntegral -> ofs) (fromIntegral -> len)
+  | ofs < 0    = error "invalid offset"
+  | len < 0    = error "invalid length"
+  | len' == 0  = mempty
+  | otherwise  = create len' go
   where
-    sliceSBS :: ShortByteString -> Int -> Int -> ShortByteString
-    sliceSBS sbs@(BSSI.SBS ba#) ofs len
-      | ofs < 0    = error "invalid offset"
-      | len < 0    = error "invalid length"
-      | len' == 0  = mempty
-      | otherwise  = createSBS len' go
-      where
-        len0 = BSS.length sbs
-        len' = max 0 (min len (len0-ofs))
-        ofs' = max 0 ofs
+    len0 = I# (sizeofByteArray# ba#)
+    !len'@(I# len'#) = max 0 (min len (len0-ofs))
+    !(I# ofs'#) = max 0 ofs
 
-        go :: MBA s -> ST s ()
-        go (MBA# mba#) = ST $ \s -> case copyByteArray# ba# (toI ofs') mba# 0# (toI len') s of
-                                      s' -> (# s', () #)
-
-        toI (I# i#) = i#
+    go :: MBA s -> ST s ()
+    go (MBA# mba#) = ST $ \s -> case copyByteArray# ba# ofs'# mba# 0# len'# s of
+                                  s' -> (# s', () #)
 
 ----------------------------------------------------------------------------
 -- low-level MutableByteArray# helpers
 
 data MBA s = MBA# (MutableByteArray# s)
 
-createTS :: Int -> (forall s. MBA s -> ST s ()) -> ShortText
-createTS n go = ShortText (createSBS n go)
-
-createSBS :: Int -> (forall s. MBA s -> ST s ()) -> ShortByteString
-createSBS n go = runST $ do
+{-# INLINE create #-}
+create :: Int -> (forall s. MBA s -> ST s ()) -> ShortText
+create n go = runST $ do
   mba <- newByteArray n
   go mba
-  unsafeFreezeSBS mba
+  unsafeFreeze mba
 
-unsafeFreezeSBS :: MBA s -> ST s ShortByteString
-unsafeFreezeSBS (MBA# mba#)
+{-# INLINE unsafeFreeze #-}
+unsafeFreeze :: MBA s -> ST s ShortText
+unsafeFreeze (MBA# mba#)
   = ST $ \s -> case unsafeFreezeByteArray# mba# s of
-                 (# s', ba# #) -> (# s', BSSI.SBS ba# #)
+                 (# s', ba# #) -> (# s', ShortText (BSSI.SBS ba#) #)
 
+{-# INLINE copyByteArray #-}
+copyByteArray :: ShortText -> Int -> MBA s -> Int -> Int -> ST s ()
+copyByteArray (ShortText (BSSI.SBS src#)) (I# src_off#) (MBA# dst#) (I# dst_off#) (I# len#)
+  = ST $ \s -> case copyByteArray# src# src_off# dst# dst_off# len# s of
+                 s' -> (# s', () #)
+
+{-# INLINE newByteArray #-}
 newByteArray :: Int -> ST s (MBA s)
 newByteArray (I# n#)
   = ST $ \s -> case newByteArray# n# s of
                  (# s', mba# #) -> (# s', MBA# mba# #)
 
+{-# INLINE writeWord8Array #-}
 writeWord8Array :: MBA s -> Int -> Word -> ST s ()
 writeWord8Array (MBA# mba#) (I# i#) (W# w#) =
   ST $ \s -> case writeWord8Array# mba# i# w# s of
@@ -457,13 +463,52 @@ writeWord8Array (MBA# mba#) (I# i#) (W# w#) =
 --
 -- @since TBD
 singleton :: Char -> ShortText
-singleton (fromIntegral . ord -> cp)
-  | cp <    0x80  = createTS 1 $ \mba -> writeCodePoint1 mba 0 cp
-  | cp <   0x800  = createTS 2 $ \mba -> writeCodePoint2 mba 0 cp
-  | cp <  0xd800  = createTS 3 $ \mba -> writeCodePoint3 mba 0 cp
-  | cp <  0xe000  = createTS 3 $ \mba -> writeRepChar mba 0
-  | cp < 0x10000  = createTS 3 $ \mba -> writeCodePoint3 mba 0 cp
-  | otherwise     = createTS 4 $ \mba -> writeCodePoint4 mba 0 cp
+singleton = singleton' . fromIntegral . ord
+
+singleton' :: Word -> ShortText
+singleton' cp
+  | cp <    0x80  = create 1 $ \mba -> writeCodePoint1 mba 0 cp
+  | cp <   0x800  = create 2 $ \mba -> writeCodePoint2 mba 0 cp
+  | cp <  0xd800  = create 3 $ \mba -> writeCodePoint3 mba 0 cp
+  | cp <  0xe000  = create 3 $ \mba -> writeRepChar    mba 0
+  | cp < 0x10000  = create 3 $ \mba -> writeCodePoint3 mba 0 cp
+  | otherwise     = create 4 $ \mba -> writeCodePoint4 mba 0 cp
+
+-- | \(\mathcal{O}(n)\) Prepend a character to a 'ShortText'.
+--
+-- prop> cons c t == singleton c <> t
+--
+-- @since TBD
+cons :: Char -> ShortText -> ShortText
+cons (fromIntegral . ord -> cp) sfx
+  | n == 0        = singleton' cp
+  | cp <    0x80  = create (n+1) $ \mba -> writeCodePoint1 mba 0 cp >> copySfx 1 mba
+  | cp <   0x800  = create (n+2) $ \mba -> writeCodePoint2 mba 0 cp >> copySfx 2 mba
+  | cp <  0xd800  = create (n+3) $ \mba -> writeCodePoint3 mba 0 cp >> copySfx 3 mba
+  | cp <  0xe000  = create (n+3) $ \mba -> writeRepChar    mba 0    >> copySfx 3 mba
+  | cp < 0x10000  = create (n+3) $ \mba -> writeCodePoint3 mba 0 cp >> copySfx 3 mba
+  | otherwise     = create (n+4) $ \mba -> writeCodePoint4 mba 0 cp >> copySfx 4 mba
+  where
+    !n = toLength sfx
+    copySfx ofs mba = copyByteArray sfx 0 mba ofs n
+
+-- | \(\mathcal{O}(n)\) Append a character to the ond of a 'ShortText'.
+--
+-- prop> snoc t c == t <> singleton c
+--
+-- @since TBD
+snoc :: ShortText -> Char -> ShortText
+snoc pfx (fromIntegral . ord -> cp)
+  | n == 0        = singleton' cp
+  | cp <    0x80  = create (n+1) $ \mba -> copyPfx mba >> writeCodePoint1 mba n cp
+  | cp <   0x800  = create (n+2) $ \mba -> copyPfx mba >> writeCodePoint2 mba n cp
+  | cp <  0xd800  = create (n+3) $ \mba -> copyPfx mba >> writeCodePoint3 mba n cp
+  | cp <  0xe000  = create (n+3) $ \mba -> copyPfx mba >> writeRepChar    mba n
+  | cp < 0x10000  = create (n+3) $ \mba -> copyPfx mba >> writeCodePoint3 mba n cp
+  | otherwise     = create (n+4) $ \mba -> copyPfx mba >> writeCodePoint4 mba n cp
+  where
+    !n = toLength pfx
+    copyPfx mba = copyByteArray pfx 0 mba 0 n
 
 {-
 writeCodePoint :: MBA s -> Int -> Word -> ST s ()
