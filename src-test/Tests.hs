@@ -47,6 +47,8 @@ qcProps = testGroup "Properties"
   , QC.testProperty "cons" $ \c t -> IUT.singleton c <> IUT.fromText t == IUT.cons c (IUT.fromText t)
   , QC.testProperty "snoc" $ \c t -> IUT.fromText t <> IUT.singleton c == IUT.snoc (IUT.fromText t) c
 
+  , QC.testProperty "uncons" $ \c t -> IUT.uncons (IUT.singleton c <> IUT.fromText t) == Just (c, IUT.fromText t)
+
   , QC.testProperty "splitAt/isPrefixOf" $ \t ->
       let t' = IUT.fromText t
       in and [ IUT.isPrefixOf (fst (IUT.splitAt i t')) t' | i <- [-5 .. 5+T.length t ] ]

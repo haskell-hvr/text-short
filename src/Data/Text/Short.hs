@@ -24,6 +24,7 @@ module Data.Text.Short
     , stripSuffix
 
     , cons
+    , uncons
     , snoc
 
       -- * Conversions

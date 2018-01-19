@@ -22,10 +22,10 @@ module Data.Text.Short.Internal
       ShortText(..)
 
       -- * Basic operations
-    , Data.Text.Short.Internal.null
-    , Data.Text.Short.Internal.length
+    , null
+    , length
     , Data.Text.Short.Internal.isAscii
-    , Data.Text.Short.Internal.splitAt
+    , splitAt
     , (!?)
     , isPrefixOf
     , stripPrefix
@@ -34,6 +34,7 @@ module Data.Text.Short.Internal
 
     , cons
     , snoc
+    , uncons
 
       -- * Conversions
       -- ** 'Char'
@@ -84,7 +85,7 @@ import           GHC.Exts                       (ByteArray#, Int (I#), Int#,
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
-import           Prelude                        hiding (length)
+import           Prelude                        hiding (length, null, splitAt)
 import           System.IO.Unsafe
 
 import qualified PrimOps
@@ -342,6 +343,24 @@ splitAt i st
 foreign import ccall unsafe "hs_text_short_index_ofs" c_text_short_index_ofs :: ByteArray# -> CSize -> CSize -> IO CSize
 
 
+-- | \(\mathcal{O}(n)\) Inverse operation to 'cons'
+--
+-- Returns 'Nothing' for empty input 'ShortText'.
+--
+-- prop> uncons (cons c t) == Just (c,t)
+--
+-- @since TBD
+uncons :: ShortText -> Maybe (Char,ShortText)
+uncons st
+  | null st    = Nothing
+  | len2 <= 0  = Just (c0, mempty)
+  | otherwise  = Just (c0, slice st ofs len2)
+  where
+    c0  = chr (fromIntegral cp0)
+    cp0 = fromIntegral (unsafePerformIO (c_text_short_index (toByteArray# st) (toCSize st) 0))
+    ofs = cpLen cp0
+    len2 = toCSize st - ofs
+
 -- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a prefix of the second 'ShortText'
 --
 -- @since TBD
@@ -456,6 +475,14 @@ writeWord8Array (MBA# mba#) (I# i#) (W# w#) =
 --  11 bits| <   0x800 | 110yyyyx  10xxxxxx
 --  16 bits| < 0x10000 | 1110yyyy  10yxxxxx  10xxxxxx
 --  21 bits|           | 11110yyy  10yyxxxx  10xxxxxx  10xxxxxx
+
+{-# INLINE cpLen #-}
+cpLen :: Word -> CSize
+cpLen cp
+  | cp <    0x80  = 1
+  | cp <   0x800  = 2
+  | cp < 0x10000  = 3
+  | otherwise     = 4
 
 -- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
 --
