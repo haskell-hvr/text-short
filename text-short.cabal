@@ -21,6 +21,11 @@ Source-Repository head
     Type:              git
     Location:          https://github.com/hvr/text-short.git
 
+flag asserts
+  description: Enable runtime-checks via @assert@
+  default: False
+  manual: True
+
 library
   exposed-modules:     Data.Text.Short
                        Data.Text.Short.Unsafe
@@ -56,6 +61,12 @@ library
                      , Unsafe
 
   c-sources: cbits/cbits.c
+
+  if flag(asserts)
+     ghc-options: -fno-ignore-asserts
+  else
+     cc-options: -DNDEBUG=1
+
   ghc-options: -Wall
   cc-options: -O3
 

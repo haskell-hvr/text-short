@@ -31,6 +31,10 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#if !defined(NDEBUG)
+# warning assert(3) checks enabled
+#endif
+
 #include <stdint.h>
 #include <string.h>
 #include <assert.h>
