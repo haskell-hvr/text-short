@@ -68,7 +68,7 @@ library
      cc-options: -DNDEBUG=1
 
   ghc-options: -Wall
-  cc-options: -O3
+  cc-options: -O3 -Wall
 
 test-suite tests
   type:                exitcode-stdio-1.0

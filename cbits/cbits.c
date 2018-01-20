@@ -36,6 +36,7 @@
 #endif
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <string.h>
 #include <assert.h>
 #include <HsFFI.h>
@@ -45,17 +46,17 @@
 #endif
 
 #if (SIZEOF_VOID_P) == 8
-const static int is_64bit = 1;
+const static bool is_64bit = true;
 #elif (SIZEOF_VOID_P) == 4
-const static int is_64bit = 0;
+const static bool is_64bit = false;
 #else
 # error unexpected SIZEOF_VOID_P value
 #endif
 
 #if (WORDS_BIGENDIAN)
-const static int is_bigendian = 1;
+const static bool is_bigendian = true;
 #else
-const static int is_bigendian = 0;
+const static bool is_bigendian = false;
 #endif
 
 /* test whether octet in UTF-8 steam is not a continuation byte, i.e. a leading byte */
