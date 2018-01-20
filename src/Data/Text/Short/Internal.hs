@@ -27,7 +27,6 @@ module Data.Text.Short.Internal
     , isAscii
     , splitAt
     , splitAtEnd
-    , (!?)
     , indexEndMaybe
     , indexMaybe
     , isPrefixOf
@@ -43,12 +42,9 @@ module Data.Text.Short.Internal
     , findIndex
     , find
     , all
-    , any
 
     , span
-    , break
     , spanEnd
-    , breakEnd
 
       -- * Conversions
       -- ** 'Char'
@@ -119,7 +115,7 @@ import qualified PrimOps
 --
 -- Currently, a boxed unshared 'T.Text' has a memory footprint of 6 words (i.e. 48 bytes on 64-bit systems) plus 2 or 4 bytes per code-point (due to the internal UTF-16 representation). Each 'T.Text' value which can share its payload with another 'T.Text' requires only 4 words additionally. Unlike 'BS.ByteString', 'T.Text' use unpinned memory.
 --
--- In comparison, the footprint of a boxed 'ShortText' is only 4 words (i.e. 32 bytes on 64-bit systems) plus 1/2/3/4 bytes per code-point (due to the internal UTF-8 representation).
+-- In comparison, the footprint of a boxed 'ShortText' is only 4 words (i.e. 32 bytes on 64-bit systems) plus 1, 2, 3, or 4 bytes per code-point (due to the internal UTF-8 representation).
 -- It can be shown that for realistic data <http://utf8everywhere.org/#asian UTF-16 has a space overhead of 50% over UTF-8>.
 --
 newtype ShortText = ShortText ShortByteString
@@ -221,14 +217,6 @@ all p st = go 0
 
     !sz = toCSize st
 
--- | \(\mathcal{O}(n)\) Test whether /any/ code points in 'ShortText' satisfy a predicate.
---
--- @since TBD
-any :: (Char -> Bool) -> ShortText -> Bool
-any p st = case find p st of
-             Nothing -> False
-             Just _  -> True
-
 -- | \(\mathcal{O}(n)\) Return the left-most codepoint in 'ShortText' that satisfies the given predicate.
 --
 -- @since TBD
@@ -259,22 +247,6 @@ findIndex p st = go 0 0
                         else go (ofs+cpLen (fromIntegral cp)) (i+1)
 
     !sz = toCSize st
-
--- | \(\mathcal{O}(n)\) Variant of 'span' with negated predicate.
---
--- > break p = span (not . p)
---
--- @since TBD
-break :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
-break p st = span (not . p) st
-
--- | \(\mathcal{O}(n)\) Variant of 'spanEnd' with negated predicate.
---
--- > breakEnd p = spanEnd (not . p)
---
--- @since TBD
-breakEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
-breakEnd p st = spanEnd (not . p) st
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into longest prefix satisfying the given predicate and the remaining suffix.
 --
@@ -437,19 +409,6 @@ isValidUtf8 st = (==0) $ unsafeDupablePerformIO (c_text_short_is_valid_utf8 (toB
 
 foreign import ccall unsafe "hs_text_short_is_valid_utf8" c_text_short_is_valid_utf8 :: ByteArray# -> CSize -> IO CInt
 
--- | \(\mathcal{O}(n)\) Index /i/-th code-point in 'ShortText'.
---
--- Infix operator alias of 'indexMaybe'
---
--- @since TBD
-(!?) :: ShortText -> Int -> Maybe Char
-(!?) st i
-  | i < 0         = Nothing
-  | cp < 0x110000 = Just (chr (fromIntegral cp))
-  | otherwise     = Nothing
-  where
-    cp = unsafePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
-
 foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteArray# -> CSize -> CSize -> IO Word32
 
 -- | \(\mathcal{O}(n)\) Lookup /i/-th code-point in 'ShortText'.
@@ -464,7 +423,12 @@ foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteA
 --
 -- @since TBD
 indexMaybe :: ShortText -> Int -> Maybe Char
-indexMaybe = (!?)
+indexMaybe st i
+  | i < 0         = Nothing
+  | cp < 0x110000 = Just (chr (fromIntegral cp))
+  | otherwise     = Nothing
+  where
+    cp = unsafeDupablePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
 
 -- | \(\mathcal{O}(n)\) Lookup /i/-th code-point from the end of 'ShortText'.
 --
