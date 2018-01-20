@@ -123,6 +123,66 @@ hs_text_short_index_ofs(const uint8_t buf[], const size_t n, const size_t i)
   assert(0);
 }
 
+/* Locate offset of j-th code-point (in reverse direction) in
+ * well-formed utf8 string starting at end of buffer.
+ *
+ * The 0-th character from the end is the last character in the utf8
+ * string (if it exists).
+ *
+ * Returns original 'n' if out of bounds.
+ *
+ */
+size_t
+hs_text_short_index_ofs_rev(const uint8_t buf[], const size_t n, const size_t i)
+{
+  size_t m = n;
+  size_t j = i;
+
+  for (;;) {
+    assert(m <= n);
+    assert(j >= 0);
+
+    if (j >= m)
+      return n; /* i-th char is < buf */
+
+    /* if (m == i-j) /\* suffix is made up only of ASCII chars, so we can shortcut *\/ */
+    /*   return 0; */
+
+    /* scan until octet does not match 10_ */
+    assert(m > 0);
+    if (!(buf[--m] & 0x80))
+      goto l_cont;
+
+    assert(m > 0);
+    if (utf8_lead_p(buf[--m])) {
+      assert ((buf[m] & 0xe0) == 0xc0); /* 110_ */
+      goto l_cont;
+    }
+
+    assert(m > 0);
+    if (utf8_lead_p(buf[--m])) {
+      assert ((buf[m] & 0xf0) == 0xe0); /* 1110_ */
+      goto l_cont;
+    }
+
+    /* this must be a non-10_ octet in a well-formed stream */
+    assert(m > 0);
+    m -= 1;
+
+    assert ((buf[m] & 0xf8) == 0xf0); /* 11110_ */
+
+  l_cont:
+    assert(utf8_lead_p(buf[m]));
+
+    if (!j)
+      return m; /* found */
+
+    j -= 1;
+  }
+
+  assert(0);
+}
+
 /* Decode UTF8 code units into code-point
  * Assumes buf[] points to start of a valid UTF8-encoded code-point
  */
@@ -175,6 +235,73 @@ hs_text_short_decode_cp(const uint8_t buf[])
   }
 }
 
+/* decode codepoint starting at buf[ofs] */
+uint32_t
+hs_text_short_ofs_cp(const uint8_t buf[], const size_t ofs)
+{
+  return hs_text_short_decode_cp(buf+ofs);
+}
+
+/* reverse-decode codepoint starting at offset right after a code-point */
+uint32_t
+hs_text_short_ofs_cp_rev(const uint8_t *buf, const size_t ofs)
+{
+  /*  7 bits | 0xxxxxxx
+   * 11 bits | 110yyyyx  10xxxxxx
+   * 16 bits | 1110yyyy  10yxxxxx  10xxxxxx
+   * 21 bits | 11110yyy  10yyxxxx  10xxxxxx  10xxxxxx
+   */
+
+  buf = buf + ofs - 1;
+
+  /* this octet is either 10_ or 0_ */
+  uint32_t cp = *buf;
+
+  if (!(cp & 0x80))
+    return cp;
+
+  assert (!utf8_lead_p(cp));
+  cp &= 0x3f;
+
+  /* this octet is either 10_ or 110_ */
+  {
+    const uint8_t b = *(--buf);
+    assert (!utf8_lead_p(b) || ((b & 0xe0) == 0xc0));
+
+    cp |=  (b & 0x3f) << 6;
+
+    if (b & 0x40) {
+      assert (cp > 0x7f); assert (cp < 0x800);
+      return cp;
+    }
+  }
+
+  /* this octet is either 10_ or 1110_ */
+  {
+    const uint8_t b = *(--buf);
+    assert (!utf8_lead_p(b) || ((b & 0xf0) == 0xe0));
+
+    if (b & 0x40) {
+      cp |= (b & 0xf) << 12;
+
+      assert (cp > 0x7ff); assert (cp < 0x10000);
+      assert (cp < 0xd800 || cp > 0xdfff);
+      return cp;
+    }
+
+    cp |= (b & 0x3f) << 12;
+  }
+
+  /* this octet must be 11110_ */
+  const uint8_t b = *(buf-1);
+  assert ((b & 0xf8) == 0xf0);
+
+  cp |= (b & 0x7) << 18;
+
+  assert (cp > 0xffff); assert (cp < 0x110000);
+  return cp;
+}
+
 /* Retrieve i-th code-point in (valid) UTF8 stream
  *
  * Returns 0xFFFFFFFF if out of bounds
@@ -190,6 +317,20 @@ hs_text_short_index_cp(const uint8_t buf[], const size_t n, const size_t i)
   return hs_text_short_decode_cp(&buf[ofs]);
 }
 
+/* Retrieve i-th code-point in (valid) UTF8 stream
+ *
+ * Returns 0xFFFFFFFF if out of bounds
+ */
+uint32_t
+hs_text_short_index_cp_rev(const uint8_t buf[], const size_t n, const size_t i)
+{
+  const size_t ofs = hs_text_short_index_ofs_rev(buf, n, i);
+
+  if (ofs >= n)
+    return UINT32_C(0xffffffff);
+
+  return hs_text_short_decode_cp(&buf[ofs]);
+}
 
 /* Validate UTF8 encoding
 
