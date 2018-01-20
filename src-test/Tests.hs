@@ -29,17 +29,33 @@ qcProps = testGroup "Properties"
   , QC.testProperty "length/fromString" $ \s -> IUT.length (IUT.fromString s) == length s
   , QC.testProperty "compare" $ \t1 t2 -> IUT.fromText t1 `compare` IUT.fromText t2  == t1 `compare` t2
   , QC.testProperty "(==)" $ \t1 t2 -> (IUT.fromText t1 == IUT.fromText t2)  == (t1 == t2)
-  , QC.testProperty "(!?)" $ \t -> let t' = IUT.fromText t
-                                   in mapMaybe (t' IUT.!?) [-5 .. 5+T.length t ] == T.unpack t
+  , QC.testProperty "(!?)" $ \t ->
+      let t' = IUT.fromText t
+      in and [ mapMaybe (t' IUT.!?) [0 .. T.length t -1 ] == T.unpack t
+             , mapMaybe (t' IUT.!?) [-5 .. -1] == []
+             , mapMaybe (t' IUT.!?) [T.length t .. T.length t + 5] == []
+             ]
+  , QC.testProperty "indexEndMaybe" $ \t ->
+      let t' = IUT.fromText t
+      in and [ mapMaybe (IUT.indexEndMaybe t') [0 .. T.length t -1 ] == T.unpack (T.reverse t)
+             , mapMaybe (IUT.indexEndMaybe t') [-5 .. -1] == []
+             , mapMaybe (IUT.indexEndMaybe t') [T.length t .. T.length t + 5] == []
+             ]
   , QC.testProperty "toText.fromText"   $ \t -> (IUT.toText . IUT.fromText) t == t
   , QC.testProperty "fromByteString"    $ \b -> IUT.fromByteString b == fromByteStringRef b
   , QC.testProperty "fromByteString.toByteString" $ \t -> let ts = IUT.fromText t in (IUT.fromByteString . IUT.toByteString) ts == Just ts
   , QC.testProperty "toString.fromString" $ \s -> (IUT.toString . IUT.fromString) s == s
   , QC.testProperty "isAscii"  $ \s -> IUT.isAscii (IUT.fromString s) == all isAscii s
   , QC.testProperty "isAscii2" $ \t -> IUT.isAscii (IUT.fromText t)   == T.all isAscii t
-  , QC.testProperty "splitAt" $ \t -> let t' = IUT.fromText t
-                                          mapBoth f (x,y) = (f x, f y)
-                                      in and [ mapBoth IUT.toText (IUT.splitAt i t') == T.splitAt i t | i <- [-5 .. 5+T.length t ] ]
+  , QC.testProperty "splitAt" $ \t ->
+      let t' = IUT.fromText t
+          mapBoth f (x,y) = (f x, f y)
+      in and [ mapBoth IUT.toText (IUT.splitAt i t') == T.splitAt i t | i <- [-5 .. 5+T.length t ] ]
+
+  , QC.testProperty "splitAtEnd" $ \t ->
+      let t' = IUT.fromText t
+          n' = IUT.length t'
+      in and [ (IUT.splitAt (n'-i) t') == IUT.splitAtEnd i t' | i <- [-5 .. 5+n' ] ]
 
   , QC.testProperty "isSuffixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isSuffixOf` IUT.fromText t2  == t1 `T.isSuffixOf` t2
   , QC.testProperty "isPrefixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isPrefixOf` IUT.fromText t2  == t1 `T.isPrefixOf` t2
@@ -49,6 +65,20 @@ qcProps = testGroup "Properties"
 
   , QC.testProperty "uncons" $ \c t -> IUT.uncons (IUT.singleton c <> IUT.fromText t) == Just (c, IUT.fromText t)
 
+  , QC.testProperty "unsnoc" $ \c t -> IUT.unsnoc (IUT.fromText t <> IUT.singleton c) == Just (IUT.fromText t, c)
+
+  , QC.testProperty "break" $ \t -> let (l,r)   = IUT.break Data.Char.isAscii (IUT.fromText t)
+                                    in  T.break Data.Char.isAscii t == (IUT.toText l,IUT.toText r)
+
+  , QC.testProperty "span"  $ \t -> let (l,r)   = IUT.span Data.Char.isAscii (IUT.fromText t)
+                                    in  T.span Data.Char.isAscii t == (IUT.toText l,IUT.toText r)
+
+  , QC.testProperty "breakEnd" $ \t -> let (l,r)   = IUT.breakEnd Data.Char.isAscii (IUT.fromText t)
+                                       in  t_breakEnd Data.Char.isAscii t == (IUT.toText l,IUT.toText r)
+
+  , QC.testProperty "spanEnd"  $ \t -> let (l,r)   = IUT.spanEnd Data.Char.isAscii (IUT.fromText t)
+                                       in  t_spanEnd Data.Char.isAscii t == (IUT.toText l,IUT.toText r)
+
   , QC.testProperty "splitAt/isPrefixOf" $ \t ->
       let t' = IUT.fromText t
       in and [ IUT.isPrefixOf (fst (IUT.splitAt i t')) t' | i <- [-5 .. 5+T.length t ] ]
@@ -57,16 +87,23 @@ qcProps = testGroup "Properties"
       in and [ IUT.isSuffixOf (snd (IUT.splitAt i t')) t' | i <- [-5 .. 5+T.length t ] ]
   ]
 
+t_breakEnd p t = t_spanEnd (not . p) t
+t_spanEnd  p t = (T.dropWhileEnd p t, T.takeWhileEnd p t)
+
 unitTests = testGroup "Unit-tests"
   [ testCase "fromText mempty" $ IUT.fromText mempty @?= mempty
   , testCase "fromShortByteString [0xc0,0x80]" $ IUT.fromShortByteString "\xc0\x80" @?= Nothing
   , testCase "fromByteString [0xc0,0x80]" $ IUT.fromByteString "\xc0\x80" @?= Nothing
+  , testCase "fromByteString [0xf0,0x90,0x80,0x80]" $ IUT.fromByteString "\xf0\x90\x80\x80" @?= Just "\x10000"
+  , testCase "fromByteString [0xf4,0x90,0x80,0x80]" $ IUT.fromByteString "\244\144\128\128" @?= Nothing
   , testCase "IsString U+D800" $ "\xFFFD" @?= (IUT.fromString "\xD800")
 --  , testCase "IsString U+D800" $ (IUT.fromString "\xD800") @?= IUT.fromText ("\xD800" :: T.Text)
 
   , testCase "Binary.encode" $ encode ("Hello \8364 & \171581!\NUL" :: IUT.ShortText) @?= "\NUL\NUL\NUL\NUL\NUL\NUL\NUL\DC2Hello \226\130\172 & \240\169\184\189!\NUL"
   , testCase "Binary.decode" $ decode ("\NUL\NUL\NUL\NUL\NUL\NUL\NUL\DC2Hello \226\130\172 & \240\169\184\189!\NUL") @?= ("Hello \8364 & \171581!\NUL" :: IUT.ShortText)
   , testCase "singleton" $ [ c | c <- [minBound..maxBound], IUT.singleton c /= IUT.fromText (T.singleton c) ] @?= []
+
+  , testCase "splitAtEnd" $ IUT.splitAtEnd 1 "€€" @?= ("€","€")
   ]
 
 -- isScalar :: Char -> Bool

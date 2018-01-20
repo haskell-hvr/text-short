@@ -17,7 +17,10 @@ module Data.Text.Short
     , length
     , isAscii
     , (!?)
+    , indexMaybe
+    , indexEndMaybe
     , splitAt
+    , splitAtEnd
     , isPrefixOf
     , stripPrefix
     , isSuffixOf
@@ -26,6 +29,17 @@ module Data.Text.Short
     , cons
     , uncons
     , snoc
+    , unsnoc
+
+    , findIndex
+    , find
+    , all
+    , any
+
+    , span
+    , break
+    , spanEnd
+    , breakEnd
 
       -- * Conversions
       -- ** 'Char'
@@ -35,11 +49,11 @@ module Data.Text.Short
     , fromString
     , toString
 
-      -- ** 'T.Text'
+      -- ** 'Text'
     , fromText
     , toText
 
-      -- ** 'BS.ByteString'
+      -- ** 'ByteString'
     , fromShortByteString
     , toShortByteString
 

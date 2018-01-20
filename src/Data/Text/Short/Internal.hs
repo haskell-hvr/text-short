@@ -24,9 +24,12 @@ module Data.Text.Short.Internal
       -- * Basic operations
     , null
     , length
-    , Data.Text.Short.Internal.isAscii
+    , isAscii
     , splitAt
+    , splitAtEnd
     , (!?)
+    , indexEndMaybe
+    , indexMaybe
     , isPrefixOf
     , stripPrefix
     , isSuffixOf
@@ -35,6 +38,17 @@ module Data.Text.Short.Internal
     , cons
     , snoc
     , uncons
+    , unsnoc
+
+    , findIndex
+    , find
+    , all
+    , any
+
+    , span
+    , break
+    , spanEnd
+    , breakEnd
 
       -- * Conversions
       -- ** 'Char'
@@ -59,17 +73,25 @@ module Data.Text.Short.Internal
 
     , toBuilder
 
+      -- * misc
+      -- ** For Haddock
+
+    , BS.ByteString
+    , T.Text
+
+      -- ** Internals
+    , isValidUtf8
     ) where
 
 import           Control.DeepSeq                (NFData)
 import           Data.Binary
-import           Data.Bits
+import           Data.Bits                      (shiftR, (.&.), (.|.))
 import qualified Data.ByteString                as BS
 import qualified Data.ByteString.Builder        as BB
 import           Data.ByteString.Short          (ShortByteString)
 import qualified Data.ByteString.Short          as BSS
 import qualified Data.ByteString.Short.Internal as BSSI
-import           Data.Char
+import           Data.Char                      (chr, ord)
 import           Data.Hashable                  (Hashable)
 import           Data.Semigroup
 import qualified Data.String                    as S
@@ -85,7 +107,8 @@ import           GHC.Exts                       (ByteArray#, Int (I#), Int#,
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
-import           Prelude                        hiding (length, null, splitAt)
+import           Prelude                        hiding (all, any, break, length,
+                                                 null, span, splitAt)
 import           System.IO.Unsafe
 
 import qualified PrimOps
@@ -172,12 +195,118 @@ length st = fromIntegral $ unsafePerformIO (c_text_short_length (toByteArray# st
 foreign import ccall unsafe "hs_text_short_length" c_text_short_length :: ByteArray# -> CSize -> IO CSize
 
 -- | \(\mathcal{O}(n)\) Test whether 'ShortText' contains only ASCII code-points (i.e. only U+0000 through U+007F).
+--
+-- This is a more efficient version of @'all' 'Data.Char.isAscii'@.
+--
 isAscii :: ShortText -> Bool
 isAscii st = (/= 0) $ unsafePerformIO (c_text_short_is_ascii (toByteArray# st) sz)
   where
     sz = toCSize st
 
 foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: ByteArray# -> CSize -> IO CInt
+
+-- | \(\mathcal{O}(n)\) Test whether /all/ code points in 'ShortText' satisfy a predicate.
+--
+-- @since TBD
+all :: (Char -> Bool) -> ShortText -> Bool
+all p st = go 0
+  where
+    go ofs
+      | ofs >= sz  = True
+      | otherwise  = let !cp = readCodePoint st ofs
+                         c = chr (fromIntegral cp)
+                     in if p c
+                        then go (ofs+cpLen (fromIntegral cp))
+                        else False
+
+    !sz = toCSize st
+
+-- | \(\mathcal{O}(n)\) Test whether /any/ code points in 'ShortText' satisfy a predicate.
+--
+-- @since TBD
+any :: (Char -> Bool) -> ShortText -> Bool
+any p st = case find p st of
+             Nothing -> False
+             Just _  -> True
+
+-- | \(\mathcal{O}(n)\) Return the left-most codepoint in 'ShortText' that satisfies the given predicate.
+--
+-- @since TBD
+find :: (Char -> Bool) -> ShortText -> Maybe Char
+find p st = go 0
+  where
+    go ofs
+      | ofs >= sz  = Nothing
+      | otherwise  = let !cp = readCodePoint st ofs
+                         c = chr (fromIntegral cp)
+                     in if p c
+                        then Just c
+                        else go (ofs+cpLen (fromIntegral cp))
+
+    !sz = toCSize st
+
+-- | \(\mathcal{O}(n)\) Return the index of the left-most codepoint in 'ShortText' that satisfies the given predicate.
+--
+-- @since TBD
+findIndex :: (Char -> Bool) -> ShortText -> Maybe Int
+findIndex p st = go 0 0
+  where
+    go ofs i
+      | ofs >= sz  = Nothing
+      | otherwise  = let !cp = readCodePoint st ofs
+                     in if p (chr (fromIntegral cp))
+                        then Just i
+                        else go (ofs+cpLen (fromIntegral cp)) (i+1)
+
+    !sz = toCSize st
+
+-- | \(\mathcal{O}(n)\) Variant of 'span' with negated predicate.
+--
+-- > break p = span (not . p)
+--
+-- @since TBD
+break :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
+break p st = span (not . p) st
+
+-- | \(\mathcal{O}(n)\) Variant of 'spanEnd' with negated predicate.
+--
+-- > breakEnd p = spanEnd (not . p)
+--
+-- @since TBD
+breakEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
+breakEnd p st = spanEnd (not . p) st
+
+-- | \(\mathcal{O}(n)\) Split 'ShortText' into longest prefix satisfying the given predicate and the remaining suffix.
+--
+-- @since TBD
+span :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
+span p st = splitAt' (go 0) st
+  where
+    go ofs | ofs >= sz  = ofs
+    go ofs
+      | p (chr (fromIntegral cp)) = go (ofs+cpLen (fromIntegral cp))
+      | otherwise                 = ofs
+      where
+        !cp = readCodePoint st ofs
+
+    !sz = toCSize st
+
+-- | \(\mathcal{O}(n)\) Split 'ShortText' into longest suffix satisfying the given predicate and the preceding prefix.
+--
+-- prop> fst (spanEnd p t) <> snd (spanEnd p t) == t
+--
+-- @since TBD
+spanEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
+spanEnd p st = splitAt' (go sz) st
+  where
+    go 0 = 0
+    go ofs
+      | p (chr (fromIntegral cp)) = go (ofs-cpLen (fromIntegral cp))
+      | otherwise                 = ofs
+      where
+        !cp = readCodePointRev st ofs
+
+    !sz = toCSize st
 
 ----------------------------------------------------------------------------
 
@@ -300,15 +429,17 @@ decodeStringShort' te = decodeString' te . BSS.fromShort
 encodeStringShort :: TextEncoding -> String -> BSS.ShortByteString
 encodeStringShort te = BSS.toShort . encodeString te
 
+-- isValidUtf8' :: ShortText -> Int
+-- isValidUtf8' st = fromIntegral $ unsafeDupablePerformIO (c_text_short_is_valid_utf8 (toByteArray# st) (toCSize st))
 
 isValidUtf8 :: ShortText -> Bool
-isValidUtf8 st = (==0) $ unsafePerformIO (c_text_short_is_valid_utf8 (toByteArray# st) (toCSize st))
+isValidUtf8 st = (==0) $ unsafeDupablePerformIO (c_text_short_is_valid_utf8 (toByteArray# st) (toCSize st))
 
 foreign import ccall unsafe "hs_text_short_is_valid_utf8" c_text_short_is_valid_utf8 :: ByteArray# -> CSize -> IO CInt
 
 -- | \(\mathcal{O}(n)\) Index /i/-th code-point in 'ShortText'.
 --
--- Returns 'Nothing' if out of bounds.
+-- Infix operator alias of 'indexMaybe'
 --
 -- @since TBD
 (!?) :: ShortText -> Int -> Maybe Char
@@ -321,26 +452,91 @@ foreign import ccall unsafe "hs_text_short_is_valid_utf8" c_text_short_is_valid_
 
 foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteArray# -> CSize -> CSize -> IO Word32
 
+-- | \(\mathcal{O}(n)\) Lookup /i/-th code-point in 'ShortText'.
+--
+-- Returns 'Nothing' if out of bounds.
+--
+-- prop> indexMaybe (singleton c) 0 == Just c
+--
+-- prop> indexMaybe t 0 == fst (uncons t)
+--
+-- prop> indexMaybe mempty i        == Nothing
+--
+-- @since TBD
+indexMaybe :: ShortText -> Int -> Maybe Char
+indexMaybe = (!?)
+
+-- | \(\mathcal{O}(n)\) Lookup /i/-th code-point from the end of 'ShortText'.
+--
+-- Returns 'Nothing' if out of bounds.
+--
+-- prop> indexMaybe (singleton c) 0 == Just c
+--
+-- prop> indexMaybe t 0 == snd (unsnoc t)
+--
+-- prop> indexMaybe mempty i        == Nothing
+--
+-- @since TBD
+indexEndMaybe :: ShortText -> Int -> Maybe Char
+indexEndMaybe st i
+  | i < 0         = Nothing
+  | cp < 0x110000 = Just (chr (fromIntegral cp))
+  | otherwise     = Nothing
+  where
+    cp = unsafePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
+
+foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev :: ByteArray# -> CSize -> CSize -> IO Word32
+
+
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
 --
 -- @'splitAt' n t@ returns a pair of 'ShortText' with the following properties:
 --
--- prop> length (fst (split n t)) == min (length t) (max 0 n)
+-- prop> length (fst (splitAt n t)) == min (length t) (max 0 n)
 --
--- prop> fst (split n t) <> snd (split n t) == t
+-- prop> fst (splitAt n t) <> snd (split n t) == t
 --
 -- @since TBD
 splitAt :: Int -> ShortText -> (ShortText,ShortText)
 splitAt i st
-  | i    <= 0    = (mempty,st)
-  | len2 <= 0    = (st,mempty)
-  | otherwise    = (slice st 0 ofs, slice st ofs len2)
+  | i <= 0    = (mempty,st)
+  | otherwise = splitAt' ofs st
   where
-    ofs   = unsafePerformIO (c_text_short_index_ofs (toByteArray# st) stsz (fromIntegral i))
+    ofs   = unsafeDupablePerformIO (c_text_short_index_ofs (toByteArray# st) stsz (fromIntegral i))
     stsz  = toCSize st
-    len2  = stsz-ofs
+
+-- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
+--
+-- @'splitAtEnd' n t@ returns a pair of 'ShortText' with the following properties:
+--
+-- prop> length (snd (splitAtEnd n t)) == min (length t) (max 0 n)
+--
+-- prop> fst (splitAtEnd n t) <> snd (splitAtEnd n t) == t
+--
+-- prop> splitAtEnd n t = splitAt (length t - n) t
+--
+-- @since TBD
+splitAtEnd :: Int -> ShortText -> (ShortText,ShortText)
+splitAtEnd i st
+  | i <= 0      = (st,mempty)
+  | ofs >= stsz = (mempty,st)
+  | otherwise   = splitAt' ofs st
+  where
+    ofs   = unsafeDupablePerformIO (c_text_short_index_ofs_rev (toByteArray# st) stsz (fromIntegral (i-1)))
+    stsz  = toCSize st
+
+{-# INLINE splitAt' #-}
+splitAt' :: CSize -> ShortText -> (ShortText,ShortText)
+splitAt' ofs st
+  | ofs  == 0    = (mempty,st)
+  | ofs  >  stsz = (st,mempty)
+  | otherwise    = (slice st 0 ofs, slice st ofs (stsz-ofs))
+  where
+    !stsz  = toCSize st
 
 foreign import ccall unsafe "hs_text_short_index_ofs" c_text_short_index_ofs :: ByteArray# -> CSize -> CSize -> IO CSize
+
+foreign import ccall unsafe "hs_text_short_index_ofs_rev" c_text_short_index_ofs_rev :: ByteArray# -> CSize -> CSize -> IO CSize
 
 
 -- | \(\mathcal{O}(n)\) Inverse operation to 'cons'
@@ -353,13 +549,31 @@ foreign import ccall unsafe "hs_text_short_index_ofs" c_text_short_index_ofs :: 
 uncons :: ShortText -> Maybe (Char,ShortText)
 uncons st
   | null st    = Nothing
-  | len2 <= 0  = Just (c0, mempty)
+  | len2 == 0  = Just (c0, mempty)
   | otherwise  = Just (c0, slice st ofs len2)
   where
     c0  = chr (fromIntegral cp0)
-    cp0 = fromIntegral (unsafePerformIO (c_text_short_index (toByteArray# st) (toCSize st) 0))
+    cp0 = fromIntegral (readCodePoint st 0)
     ofs = cpLen cp0
     len2 = toCSize st - ofs
+
+-- | \(\mathcal{O}(n)\) Inverse operation to 'snoc'
+--
+-- Returns 'Nothing' for empty input 'ShortText'.
+--
+-- prop> unsnoc (snoc t c) == Just (t,c)
+--
+-- @since TBD
+unsnoc :: ShortText -> Maybe (ShortText,Char)
+unsnoc st
+  | null st    = Nothing
+  | len1 == 0  = Just (mempty, c0)
+  | otherwise  = Just (slice st 0 len1, c0)
+  where
+    c0  = chr (fromIntegral cp0)
+    cp0 = fromIntegral (readCodePointRev st stsz)
+    stsz = toCSize st
+    len1 = stsz - cpLen cp0
 
 -- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a prefix of the second 'ShortText'
 --
@@ -576,6 +790,16 @@ writeRepChar mba ofs = do
   writeWord8Array mba (ofs+1) 0xbf
   writeWord8Array mba (ofs+2) 0xbd
 
+-- beware: UNSAFE!
+readCodePoint :: ShortText -> CSize -> Word32
+readCodePoint st ofs = unsafeDupablePerformIO (c_text_short_ofs_cp (toByteArray# st) ofs)
+
+foreign import ccall unsafe "hs_text_short_ofs_cp" c_text_short_ofs_cp :: ByteArray# -> CSize -> IO Word32
+
+readCodePointRev :: ShortText -> CSize -> Word32
+readCodePointRev st ofs = unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByteArray# st) ofs)
+
+foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :: ByteArray# -> CSize -> IO Word32
 
 {- TODO:
 {-# RULES "ShortText strlit" forall s . fromString (unpackCString# s) = fromAddr# #-}
