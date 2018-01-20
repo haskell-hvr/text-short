@@ -106,6 +106,8 @@ import           GHC.ST
 import           Prelude                        hiding (all, any, break, length,
                                                  null, span, splitAt)
 import           System.IO.Unsafe
+import           Text.Printf                    (PrintfArg, formatArg,
+                                                 formatString)
 
 import qualified PrimOps
 
@@ -155,6 +157,10 @@ instance Show ShortText where
 
 instance Read ShortText where
     readsPrec p = map (\(x,s) -> (ShortText $ encodeStringShort utf8 x,s)) . readsPrec p
+
+-- | @since TBD
+instance PrintfArg ShortText where
+  formatArg txt = formatString $ toString txt
 
 -- | Behaviour for @[U+D800 .. U+DFFF]@ matches the 'IsString' instance for 'T.Text'
 instance S.IsString ShortText where
