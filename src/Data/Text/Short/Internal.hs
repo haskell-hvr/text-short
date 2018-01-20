@@ -80,6 +80,7 @@ module Data.Text.Short.Internal
     ) where
 
 import           Control.DeepSeq                (NFData)
+import           Control.Monad.ST               (stToIO)
 import           Data.Binary
 import           Data.Bits                      (shiftR, (.&.), (.|.))
 import qualified Data.ByteString                as BS
@@ -94,8 +95,11 @@ import qualified Data.String                    as S
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import           Foreign.C
-import           GHC.Exts                       (ByteArray#, Int (I#), Int#,
-                                                 MutableByteArray#, Word (W#),
+import qualified GHC.CString                    as GHC
+import           GHC.Exts                       (Addr#, ByteArray#, Int (I#),
+                                                 Int#, MutableByteArray#,
+                                                 Ptr (..), RealWorld, Word (W#),
+                                                 copyAddrToByteArray#,
                                                  copyByteArray#, newByteArray#,
                                                  sizeofByteArray#,
                                                  unsafeFreezeByteArray#,
@@ -161,10 +165,6 @@ instance Read ShortText where
 -- | @since TBD
 instance PrintfArg ShortText where
   formatArg txt = formatString $ toString txt
-
--- | Behaviour for @[U+D800 .. U+DFFF]@ matches the 'IsString' instance for 'T.Text'
-instance S.IsString ShortText where
-    fromString = fromString
 
 -- | The 'Binary' encoding matches the one for 'T.Text'
 #if MIN_VERSION_binary(0,8,1)
@@ -619,7 +619,7 @@ slice (ShortText (BSSI.SBS ba#)) (fromIntegral -> ofs) (fromIntegral -> len)
 ----------------------------------------------------------------------------
 -- low-level MutableByteArray# helpers
 
-data MBA s = MBA# (MutableByteArray# s)
+data MBA s = MBA# { unMBA# :: MutableByteArray# s }
 
 {-# INLINE create #-}
 create :: Int -> (forall s. MBA s -> ST s ()) -> ShortText
@@ -648,9 +648,15 @@ newByteArray (I# n#)
 
 {-# INLINE writeWord8Array #-}
 writeWord8Array :: MBA s -> Int -> Word -> ST s ()
-writeWord8Array (MBA# mba#) (I# i#) (W# w#) =
-  ST $ \s -> case writeWord8Array# mba# i# w# s of
-               s' -> (# s', () #)
+writeWord8Array (MBA# mba#) (I# i#) (W# w#)
+  = ST $ \s -> case writeWord8Array# mba# i# w# s of
+                 s' -> (# s', () #)
+
+{-# INLINE copyAddrToByteArray #-}
+copyAddrToByteArray :: Ptr a -> MBA RealWorld -> Int -> Int -> ST RealWorld ()
+copyAddrToByteArray (Ptr src#) (MBA# dst#) (I# dst_off#) (I# len#)
+  = ST $ \s -> case copyAddrToByteArray# src# dst# dst_off# len# s of
+                 s' -> (# s', () #)
 
 ----------------------------------------------------------------------------
 -- Helpers for encoding code points into UTF-8 code units
@@ -771,7 +777,53 @@ readCodePointRev st ofs = unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByt
 
 foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :: ByteArray# -> CSize -> IO Word32
 
-{- TODO:
-{-# RULES "ShortText strlit" forall s . fromString (unpackCString# s) = fromAddr# #-}
-...
--}
+----------------------------------------------------------------------------
+-- string literals
+
+-- | Surrogate pairs (@[U+D800 .. U+DFFF]@) in literals are replaced by U+FFFD.
+--
+-- This matches the behaviour of 'IsString' instance for 'T.Text'.
+instance S.IsString ShortText where
+    fromString = fromString
+
+{-# INLINE [0] fromString #-}
+
+{-# RULES "ShortText literal" forall s . fromString (GHC.unpackCString# s) = fromLitAsciiAddr# s #-}
+
+{-# RULES "ShortText literal UTF-8" forall s . fromString (GHC.unpackCStringUtf8# s) = fromLitMUtf8Addr# s #-}
+
+{-# NOINLINE fromLitAsciiAddr# #-}
+fromLitAsciiAddr# :: Addr# -> ShortText
+fromLitAsciiAddr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
+  sz <- fromIntegral <$> c_strlen ptr
+
+  case sz `compare` 0 of
+    EQ -> return mempty
+    GT -> stToIO $ do
+      mba <- newByteArray sz
+      copyAddrToByteArray ptr mba 0 sz
+      unsafeFreeze mba
+    LT -> error "fromLitAsciiAddr#"
+
+foreign import ccall unsafe "strlen" c_strlen :: CString -> IO CSize
+
+-- GHC uses an encoding resembling Modified UTF-8 for non-ASCII string-literals
+{-# NOINLINE fromLitMUtf8Addr# #-}
+fromLitMUtf8Addr# :: Addr# -> ShortText
+fromLitMUtf8Addr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
+  sz <- c_text_short_mutf8_strlen ptr
+
+  case sz `compare` 0 of
+    EQ -> return mempty -- should not happen
+    GT -> stToIO $ do
+      mba <- newByteArray sz
+      copyAddrToByteArray ptr mba 0 sz
+      unsafeFreeze mba
+    LT -> do
+      mba <- stToIO (newByteArray (abs sz))
+      c_text_short_mutf8_trans ptr (unMBA# mba)
+      stToIO (unsafeFreeze mba)
+
+foreign import ccall unsafe "hs_text_short_mutf8_strlen" c_text_short_mutf8_strlen :: CString -> IO Int
+
+foreign import ccall unsafe "hs_text_short_mutf8_trans" c_text_short_mutf8_trans :: CString -> MutableByteArray# RealWorld -> IO ()

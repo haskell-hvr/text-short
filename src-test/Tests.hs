@@ -128,7 +128,24 @@ unitTests = testGroup "Unit-tests"
   , testCase "singleton" $ [ c | c <- [minBound..maxBound], IUT.singleton c /= IUT.fromText (T.singleton c) ] @?= []
 
   , testCase "splitAtEnd" $ IUT.splitAtEnd 1 "€€" @?= ("€","€")
+
+  , testCase "literal0" $ IUT.unpack testLit0 @?= []
+  , testCase "literal1" $ IUT.unpack testLit1 @?= ['€','\0','€','\0']
+  , testCase "literal2" $ IUT.unpack testLit2 @?= ['\xFFFD','\xD7FF','\xFFFD','\xE000']
   ]
 
 -- isScalar :: Char -> Bool
 -- isScalar c = c < '\xD800' || c >= '\xE000'
+
+
+{-# NOINLINE testLit0 #-}
+testLit0 :: IUT.ShortText
+testLit0 = ""
+
+{-# NOINLINE testLit1 #-}
+testLit1 :: IUT.ShortText
+testLit1 = "€\NUL€\NUL"
+
+{-# NOINLINE testLit2 #-}
+testLit2 :: IUT.ShortText
+testLit2 = "\xD800\xD7FF\xDFFF\xE000"

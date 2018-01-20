@@ -517,3 +517,104 @@ hs_text_short_is_ascii(const uint8_t buf[], const size_t n)
 
   return 1;
 }
+
+/*
+ * Compute length of (transcoded) mutf8 literal
+ *
+ * If the mutf8 literal does not contain either surrogates nor escaped
+ * NULs, a positive length is returned which matches what strlen(3)
+ * would have returned.
+ *
+ * Otherwise, a negated size is returned which corresponds to the size
+ * of a the mutf8->utf8 transcoded string.
+ *
+ */
+HsInt
+hs_text_short_mutf8_strlen(const uint8_t buf[])
+{
+  size_t j = 0;
+  size_t nulls = 0;
+  bool surr_seen = false;
+
+  for (;;) {
+    const uint8_t b0 = buf[j];
+
+    if (!b0)
+      break;
+
+    if (!(b0 & 0x80))
+      j += 1;   /* 0_______ */
+    else
+      switch(b0 >> 4) {
+      case 0xf: /* 11110___ */
+        j += 4;
+        break;
+      case 0xe: /* 1110____ */
+        /* UTF16 Surrogate pairs [U+D800 .. U+DFFF] */
+        if (!surr_seen && (b0 == 0xed) && (buf[j+1] & 0x20))
+          surr_seen = true;
+        j += 3;
+        break;
+      default:  /* 110_____ */
+        /* escaped NUL */
+        if ((b0 == 0xc0) && (buf[j+1] == 0x80)) {
+            nulls += 1;
+        }
+        j += 2;
+        break;
+      }
+  } /* for */
+
+
+  if ((nulls > 0) || surr_seen)
+    return -(HsInt)(j - nulls);
+
+  return j;
+}
+
+
+void
+hs_text_short_mutf8_trans(const uint8_t *src, uint8_t *dst)
+{
+  for (;;) {
+    const uint8_t b0 = *(src++);
+
+    if (!b0)
+      break;
+
+    if (!(b0 & 0x80)) { /* 0_______ */
+      *(dst++) = b0;
+    } else {
+      switch(b0 >> 4) {
+      case 0xf: /* 11110___ */
+        *(dst++) = b0;
+        *(dst++) = *(src++);
+        *(dst++) = *(src++);
+        *(dst++) = *(src++);
+        break;
+      case 0xe: /* 1110____ */
+        /* UTF16 Surrogate pairs [U+D800 .. U+DFFF] */
+        if ((b0 == 0xed) && (*src & 0x20)) {
+          *(dst++) = 0xef;
+          *(dst++) = 0xbf; src++;
+          *(dst++) = 0xbd; src++;
+        } else {
+          *(dst++) = b0;
+          *(dst++) = *(src++);
+          *(dst++) = *(src++);
+        }
+        break;
+      default:  /* 110_____ */
+        /* escaped NUL */
+        if ((b0 == 0xc0) && (*src == 0x80)) {
+          *(dst++) = 0x00;
+          src++;
+        } else {
+          *(dst++) = b0;
+          *(dst++) = *(src++);
+        }
+        break;
+      }
+    }
+  } /* for */
+}
