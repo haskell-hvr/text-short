@@ -82,18 +82,24 @@ hs_text_short_length(const uint8_t buf[], const size_t n)
 size_t
 hs_text_short_index_ofs(const uint8_t buf[], const size_t n, const size_t i)
 {
+  if (!n)
+    return n;
+
   size_t m = 0;
   size_t j = 0;
 
   for (;;) {
-    if (j >= i)
-      return m;
+    assert(m >= 0);
+    assert(j <= i);
+    assert(j <= m);
 
-    const size_t rest = n-m;
+    if (j == i)
+      return m; /* found */
 
-    if (rest < (i-j))
-      return n;
+    if (i-j >= n-m)
+      return n; /* i-th char is >= buf+n */
 
+    assert(m < n);
     const uint8_t b0 = buf[m];
 
     if (!(b0 & 0x80))
@@ -138,21 +144,33 @@ hs_text_short_decode_cp(const uint8_t buf[])
 
   switch(b0 >> 4) {
   case 0xf: /* 11110___ */
-    cp  = ((uint32_t)(b0 & 0x07)) << (6+6+6);
+    assert((b0 & 0xf8) == 0xf0);
+    assert(!utf8_lead_p(buf[1]));
+    assert(!utf8_lead_p(buf[2]));
+    assert(!utf8_lead_p(buf[3]));
+    cp  = ((uint32_t)(b0     & 0x07)) << (6+6+6);
     cp |= ((uint32_t)(buf[1] & 0x3f)) << (6+6);
     cp |= ((uint32_t)(buf[2] & 0x3f)) << 6;
     cp |=             buf[3] & 0x3f;
+    assert (cp > 0xffff); assert (cp < 0x110000);
     return cp;
 
   case 0xe: /* 1110____ */
-    cp  = ((uint32_t)(b0 & 0x0f)) << (6+6);
+    assert(!utf8_lead_p(buf[1]));
+    assert(!utf8_lead_p(buf[2]));
+    cp  = ((uint32_t)(b0     & 0x0f)) << (6+6);
     cp |= ((uint32_t)(buf[1] & 0x3f)) << 6;
     cp |=             buf[2] & 0x3f;
+    assert (cp > 0x7ff); assert (cp < 0x10000);
+    assert (cp < 0xd800 || cp > 0xdfff);
     return cp;
 
   default:  /* 110_____ */
-    cp  = ((uint32_t)(b0 & 0x1f)) << 6;
+    assert((b0 & 0xe0) == 0xc0);
+    assert(!utf8_lead_p(buf[1]));
+    cp  = ((uint32_t)(b0     & 0x1f)) << 6;
     cp |=             buf[1] & 0x3f;
+    assert (cp > 0x7f); assert (cp < 0x800);
     return cp;
   }
 }
