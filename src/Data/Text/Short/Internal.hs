@@ -795,7 +795,7 @@ instance S.IsString ShortText where
 {-# NOINLINE fromLitAsciiAddr# #-}
 fromLitAsciiAddr# :: Addr# -> ShortText
 fromLitAsciiAddr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
-  sz <- fromIntegral <$> c_strlen ptr
+  sz <- fromIntegral `fmap` c_strlen ptr
 
   case sz `compare` 0 of
     EQ -> return mempty
