@@ -63,6 +63,7 @@ qcProps = testGroup "Properties"
       in and [ mapBoth IUT.toText (IUT.splitAt i t') == T.splitAt i t | i <- [-5 .. 5+T.length t ] ]
 
   , QC.testProperty "intersperse" $ \t c -> IUT.intersperse c (IUT.fromText t) == IUT.fromText (T.intersperse c t)
+  , QC.testProperty "intercalate" $ \t1 t2 -> IUT.intercalate (IUT.fromText t1) (map IUT.fromText t2) == IUT.fromText (T.intercalate t1 t2)
 
   , QC.testProperty "splitAtEnd" $ \t ->
       let t' = IUT.fromText t

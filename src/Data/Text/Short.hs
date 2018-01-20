@@ -56,6 +56,7 @@ module Data.Text.Short
     , dropWhileEnd
 
     , intersperse
+    , intercalate
 
       -- * Conversions
       -- ** 'Char'

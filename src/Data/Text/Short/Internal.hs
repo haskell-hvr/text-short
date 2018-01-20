@@ -47,6 +47,7 @@ module Data.Text.Short.Internal
     , spanEnd
 
     , intersperse
+    , intercalate
 
       -- * Conversions
       -- ** 'Char'
@@ -92,6 +93,7 @@ import qualified Data.ByteString.Short          as BSS
 import qualified Data.ByteString.Short.Internal as BSSI
 import           Data.Char                      (chr, ord)
 import           Data.Hashable                  (Hashable)
+import qualified Data.List                      as List
 import           Data.Semigroup
 import qualified Data.String                    as S
 import qualified Data.Text                      as T
@@ -629,6 +631,15 @@ intersperse c st
       writeCodePointN csz   mba (fromIntegral ofs) cp
       writeCodePointN cp1sz mba (fromIntegral (ofs+csz)) cp1
       go mba (n-1) (ofs+csz+cp1sz) (ofs2+cp1sz)
+
+-- | \(\mathcal{O}(n)\) Insert 'ShortText' inbetween list of 'ShortText's.
+--
+-- >>> intercalate ", " ["foo","bar","doo"]
+-- "foo, bar, doo"
+--
+-- @since TBD
+intercalate :: ShortText -> [ShortText] -> ShortText
+intercalate sep ts = mconcat (List.intersperse sep ts)
 
 ----------------------------------------------------------------------------
 
