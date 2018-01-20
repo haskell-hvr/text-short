@@ -62,6 +62,8 @@ qcProps = testGroup "Properties"
           mapBoth f (x,y) = (f x, f y)
       in and [ mapBoth IUT.toText (IUT.splitAt i t') == T.splitAt i t | i <- [-5 .. 5+T.length t ] ]
 
+  , QC.testProperty "intersperse" $ \t c -> IUT.intersperse c (IUT.fromText t) == IUT.fromText (T.intersperse c t)
+
   , QC.testProperty "splitAtEnd" $ \t ->
       let t' = IUT.fromText t
           n' = IUT.length t'

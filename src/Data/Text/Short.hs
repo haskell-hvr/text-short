@@ -55,6 +55,8 @@ module Data.Text.Short
     , dropWhile
     , dropWhileEnd
 
+    , intersperse
+
       -- * Conversions
       -- ** 'Char'
     , singleton

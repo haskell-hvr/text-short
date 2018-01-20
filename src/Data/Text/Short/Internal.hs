@@ -46,6 +46,8 @@ module Data.Text.Short.Internal
     , span
     , spanEnd
 
+    , intersperse
+
       -- * Conversions
       -- ** 'Char'
     , singleton
@@ -598,6 +600,38 @@ stripSuffix sfx t
 
 ----------------------------------------------------------------------------
 
+-- | \(\mathcal{O}(n)\) Insert character between characters of 'ShortText'.
+--
+-- >>> intersperse '*' "MASH"
+-- "M*A*S*H"
+--
+-- @since TBD
+intersperse :: Char -> ShortText -> ShortText
+intersperse c st
+  | null st = mempty
+  | sn == 1 = st
+  | otherwise = create newsz $ \mba -> do
+      let cp0 = readCodePoint st 0
+          cp0sz = cpLen cp0
+      writeCodePointN cp0sz mba 0 cp0
+      go mba (sn - 1) cp0sz cp0sz
+  where
+    newsz = fromIntegral (ssz + (fromIntegral (sn-1) * csz))
+    ssz = toCSize st
+    sn  = length st
+    csz = cpLen cp
+    cp  = ch2cp c
+
+    go _   0 !_  !_   = return ()
+    go mba n ofs ofs2 = do
+      let cp1 = readCodePoint st ofs2
+          cp1sz = cpLen cp1
+      writeCodePointN csz   mba (fromIntegral ofs) cp
+      writeCodePointN cp1sz mba (fromIntegral (ofs+csz)) cp1
+      go mba (n-1) (ofs+csz+cp1sz) (ofs2+cp1sz)
+
+----------------------------------------------------------------------------
+
 -- | Construct a new 'ShortText' from an existing one by slicing
 --
 -- NB: The 'CSize' arguments refer to byte-offsets
@@ -666,6 +700,9 @@ copyAddrToByteArray (Ptr src#) (MBA# dst#) (I# dst_off#) (I# len#)
 --  16 bits| < 0x10000 | 1110yyyy  10yxxxxx  10xxxxxx
 --  21 bits|           | 11110yyy  10yyxxxx  10xxxxxx  10xxxxxx
 
+ch2cp :: Char -> Word
+ch2cp = fromIntegral . ord
+
 {-# INLINE cpLen #-}
 cpLen :: Word -> CSize
 cpLen cp
@@ -680,7 +717,7 @@ cpLen cp
 --
 -- @since TBD
 singleton :: Char -> ShortText
-singleton = singleton' . fromIntegral . ord
+singleton = singleton' . ch2cp
 
 singleton' :: Word -> ShortText
 singleton' cp
@@ -697,7 +734,7 @@ singleton' cp
 --
 -- @since TBD
 cons :: Char -> ShortText -> ShortText
-cons (fromIntegral . ord -> cp) sfx
+cons (ch2cp -> cp) sfx
   | n == 0        = singleton' cp
   | cp <    0x80  = create (n+1) $ \mba -> writeCodePoint1 mba 0 cp >> copySfx 1 mba
   | cp <   0x800  = create (n+2) $ \mba -> writeCodePoint2 mba 0 cp >> copySfx 2 mba
@@ -715,7 +752,7 @@ cons (fromIntegral . ord -> cp) sfx
 --
 -- @since TBD
 snoc :: ShortText -> Char -> ShortText
-snoc pfx (fromIntegral . ord -> cp)
+snoc pfx (ch2cp -> cp)
   | n == 0        = singleton' cp
   | cp <    0x80  = create (n+1) $ \mba -> copyPfx mba >> writeCodePoint1 mba n cp
   | cp <   0x800  = create (n+2) $ \mba -> copyPfx mba >> writeCodePoint2 mba n cp
@@ -737,6 +774,13 @@ writeCodePoint mba ofs cp
   | cp < 0x10000  = writeCodePoint3 mba ofs cp
   | otherwise     = writeCodePoint4 mba ofs cp
 -}
+
+writeCodePointN :: CSize -> MBA s -> Int -> Word -> ST s ()
+writeCodePointN 1 = writeCodePoint1
+writeCodePointN 2 = writeCodePoint2
+writeCodePointN 3 = writeCodePoint3
+writeCodePointN 4 = writeCodePoint4
+writeCodePointN _ = undefined
 
 writeCodePoint1 :: MBA s -> Int -> Word -> ST s ()
 writeCodePoint1 mba ofs cp =
@@ -767,13 +811,13 @@ writeRepChar mba ofs = do
   writeWord8Array mba (ofs+2) 0xbd
 
 -- beware: UNSAFE!
-readCodePoint :: ShortText -> CSize -> Word32
-readCodePoint st ofs = unsafeDupablePerformIO (c_text_short_ofs_cp (toByteArray# st) ofs)
+readCodePoint :: ShortText -> CSize -> Word
+readCodePoint st ofs = fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp (toByteArray# st) ofs)
 
 foreign import ccall unsafe "hs_text_short_ofs_cp" c_text_short_ofs_cp :: ByteArray# -> CSize -> IO Word32
 
-readCodePointRev :: ShortText -> CSize -> Word32
-readCodePointRev st ofs = unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByteArray# st) ofs)
+readCodePointRev :: ShortText -> CSize -> Word
+readCodePointRev st ofs = fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByteArray# st) ofs)
 
 foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :: ByteArray# -> CSize -> IO Word32
 
