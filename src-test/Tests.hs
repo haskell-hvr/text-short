@@ -67,6 +67,9 @@ qcProps = testGroup "Properties"
           n' = IUT.length t'
       in and [ (IUT.splitAt (n'-i) t') == IUT.splitAtEnd i t' | i <- [-5 .. 5+n' ] ]
 
+  , QC.testProperty "find" $ \t -> IUT.find Data.Char.isAscii (IUT.fromText t) == T.find Data.Char.isAscii t
+  , QC.testProperty "findIndex" $ \t -> IUT.findIndex Data.Char.isAscii (IUT.fromText t) == T.findIndex Data.Char.isAscii t
+
   , QC.testProperty "isSuffixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isSuffixOf` IUT.fromText t2  == t1 `T.isSuffixOf` t2
   , QC.testProperty "isPrefixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isPrefixOf` IUT.fromText t2  == t1 `T.isPrefixOf` t2
 
