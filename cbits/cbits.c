@@ -54,6 +54,8 @@ const static int is_bigendian = 1;
 const static int is_bigendian = 0;
 #endif
 
+/* test whether octet in UTF-8 steam is not a continuation byte, i.e. a leading byte */
+#define utf8_lead_p(octet) (((octet) & 0xc0) != 0x80)
 
 /* Count number of code-points in well-formed utf8 string */
 size_t
@@ -64,7 +66,7 @@ hs_text_short_length(const uint8_t buf[], const size_t n)
 
   /* Both GCC & Clang are able to optimise the code below quite well at -O3 */
   for (j = 0; j < n; j++)
-    if ((buf[j] & 0xc0) != 0x80)
+    if (utf8_lead_p(buf[j]))
       l++;
 
   return l;
@@ -212,7 +214,7 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
       if ((j+1) >= n) return (n-(j+2));
 
       const uint8_t b1 = buf[j++];
-      if ((b1 & 0xc0) != 0x80) return 1; /* b1 elem [ 0x80 .. 0xbf ] */
+      if (utf8_lead_p(b1)) return 1; /* b1 elem [ 0x80 .. 0xbf ] */
 
       /* if b0==0xe0: b1 elem [ 0xa0 .. 0xbf ] */
       if (!((b0 & 0x0f) | (b1 & 0x20))) return 1; /* denorm */
@@ -229,7 +231,7 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
 
       const uint8_t b1 = buf[j++];
 
-      if ((b1 & 0xc0) != 0x80)         /* b1 elem [ 0x80 .. 0xbf ] */
+      if (utf8_lead_p(b1))         /* b1 elem [ 0x80 .. 0xbf ] */
         return 1;
 
       if (!((b0 & 0x03) | (b1 & 0x30))) /* if b0==0xf0: b1 elem [ 0x90 .. 0xbf ] */
@@ -247,12 +249,12 @@ hs_text_short_is_valid_utf8(const uint8_t buf[], const size_t n)
 
     l_trail2:
       /* b2 */
-      if ((buf[j++] & 0xc0) != 0x80) return 1;
+      if (utf8_lead_p(buf[j++])) return 1;
       /* b2 elem [ 0x80 .. 0xbf ] */
 
     l_trail1:
       /* b3 */
-      if ((buf[j++] & 0xc0) != 0x80) return 1;
+      if (utf8_lead_p(buf[j++])) return 1;
       /* b3 elem [ 0x80 .. 0xbf ] */
 
       continue;
