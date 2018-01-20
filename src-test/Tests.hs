@@ -135,7 +135,9 @@ unitTests = testGroup "Unit-tests"
   , testCase "literal0" $ IUT.unpack testLit0 @?= []
   , testCase "literal1" $ IUT.unpack testLit1 @?= ['€','\0','€','\0']
   , testCase "literal2" $ IUT.unpack testLit2 @?= ['\xFFFD','\xD7FF','\xFFFD','\xE000']
-  ]
+  , testCase "literal3" $ IUT.unpack testLit3 @?= ['\1'..'\x7f']
+  , testCase "literal4" $ IUT.unpack testLit4 @?= map toEnum [0,1,126,127,128,129,130,256,2046,2047,2048,2049,2050,65530,65531,65532,65533,65534,65533,65535,65536,65537,65538,1114110,1114111]
+ ]
 
 -- isScalar :: Char -> Bool
 -- isScalar c = c < '\xD800' || c >= '\xE000'
@@ -152,3 +154,11 @@ testLit1 = "€\NUL€\NUL"
 {-# NOINLINE testLit2 #-}
 testLit2 :: IUT.ShortText
 testLit2 = "\xD800\xD7FF\xDFFF\xE000"
+
+{-# NOINLINE testLit3 #-}
+testLit3 :: IUT.ShortText
+testLit3 = "\SOH\STX\ETX\EOT\ENQ\ACK\a\b\t\n\v\f\r\SO\SI\DLE\DC1\DC2\DC3\DC4\NAK\SYN\ETB\CAN\EM\SUB\ESC\FS\GS\RS\US !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\DEL"
+
+{-# NOINLINE testLit4 #-}
+testLit4 :: IUT.ShortText
+testLit4 = "\NUL\SOH~\DEL\128\129\130\256\2046\2047\2048\2049\2050\65530\65531\65532\65533\65534\65533\65535\65536\65537\65538\1114110\1114111"

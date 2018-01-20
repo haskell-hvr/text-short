@@ -38,6 +38,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <HsFFI.h>
 
@@ -57,6 +58,14 @@ const static bool is_64bit = false;
 const static bool is_bigendian = true;
 #else
 const static bool is_bigendian = false;
+#endif
+
+#if defined(__GNUC__)
+# define likely(x)     __builtin_expect(!!(x),1)
+# define unlikely(x)   __builtin_expect(!!(x),0)
+#else
+# define likely(x)     (x)
+# define unlikely(x)   (x)
 #endif
 
 /* test whether octet in UTF-8 steam is not a continuation byte, i.e. a leading byte */
@@ -539,10 +548,10 @@ hs_text_short_mutf8_strlen(const uint8_t buf[])
   for (;;) {
     const uint8_t b0 = buf[j];
 
-    if (!b0)
+    if (unlikely(!b0))
       break;
 
-    if (!(b0 & 0x80))
+    if (likely(!(b0 & 0x80)))
       j += 1;   /* 0_______ */
     else
       switch(b0 >> 4) {
@@ -551,15 +560,14 @@ hs_text_short_mutf8_strlen(const uint8_t buf[])
         break;
       case 0xe: /* 1110____ */
         /* UTF16 Surrogate pairs [U+D800 .. U+DFFF] */
-        if (!surr_seen && (b0 == 0xed) && (buf[j+1] & 0x20))
+        if (unlikely(!surr_seen && (b0 == 0xed) && (buf[j+1] & 0x20)))
           surr_seen = true;
         j += 3;
         break;
       default:  /* 110_____ */
         /* escaped NUL */
-        if ((b0 == 0xc0) && (buf[j+1] == 0x80)) {
-            nulls += 1;
-        }
+        if (unlikely((b0 == 0xc0) && (buf[j+1] == 0x80)))
+          nulls += 1;
         j += 2;
         break;
       }
@@ -572,49 +580,75 @@ hs_text_short_mutf8_strlen(const uint8_t buf[])
   return j;
 }
 
-
+/* Transcode Modified UTF-8 to proper UTF-8
+ *
+ * This involves
+ *
+ *  1. Unescape denormal 2-byte NULs (0xC0 0x80)
+ *  2. Rewrite surrogate pairs to U+FFFD
+ */
 void
-hs_text_short_mutf8_trans(const uint8_t *src, uint8_t *dst)
+hs_text_short_mutf8_trans(const uint8_t src0[], uint8_t dst0[])
 {
-  for (;;) {
-    const uint8_t b0 = *(src++);
+  const uint8_t *src = src0;
+  uint8_t *dst = dst0;
 
-    if (!b0)
+  for (;;) {
+    const uint8_t b0 = *src++;
+    assert(utf8_lead_p(b0));
+
+    if (likely(!(b0 & 0x80))) { /* 0_______ */
+      if (unlikely(!b0))
+        break;
+
+      *dst++ = b0;
+      continue;
+    }
+
+    switch(b0 >> 4) {
+    case 0xf: /* 11110___ */
+      assert(!utf8_lead_p(src[0]));
+      assert(!utf8_lead_p(src[1]));
+      assert(!utf8_lead_p(src[2]));
+      *dst++ = b0;
+      *dst++ = *src++;
+      *dst++ = *src++;
+      *dst++ = *src++;
       break;
 
-    if (!(b0 & 0x80)) { /* 0_______ */
-      *(dst++) = b0;
-    } else {
-      switch(b0 >> 4) {
-      case 0xf: /* 11110___ */
-        *(dst++) = b0;
-        *(dst++) = *(src++);
-        *(dst++) = *(src++);
-        *(dst++) = *(src++);
-        break;
-      case 0xe: /* 1110____ */
-        /* UTF16 Surrogate pairs [U+D800 .. U+DFFF] */
-        if ((b0 == 0xed) && (*src & 0x20)) {
-          *(dst++) = 0xef;
-          *(dst++) = 0xbf; src++;
-          *(dst++) = 0xbd; src++;
-        } else {
-          *(dst++) = b0;
-          *(dst++) = *(src++);
-          *(dst++) = *(src++);
-        }
-        break;
-      default:  /* 110_____ */
-        /* escaped NUL */
-        if ((b0 == 0xc0) && (*src == 0x80)) {
-          *(dst++) = 0x00;
-          src++;
-        } else {
-          *(dst++) = b0;
-          *(dst++) = *(src++);
-        }
-        break;
+    case 0xe: { /* 1110____ */
+      const uint8_t b1 = *src++;
+      const uint8_t b2 = *src++;
+      assert(!utf8_lead_p(b1));
+      assert(!utf8_lead_p(b2));
+      if (unlikely((b0 == 0xed) && (b1 & 0x20))) {
+        /* UTF16 Surrogate pairs [U+D800 .. U+DFFF]
+         * -> translate into U+FFFD
+         */
+        *dst++ = 0xef;
+        *dst++ = 0xbf;
+        *dst++ = 0xbd;
+      } else {
+        *dst++ = b0;
+        *dst++ = b1;
+        *dst++ = b2;
       }
+      break;
     }
+    default: { /* 110_____ */
+      const uint8_t b1 = *src++;
+      assert(!utf8_lead_p(b1));
+      if (unlikely((b0 == 0xc0) && (b1 == 0x80))) {
+        /* escaped/denormal U+0000 -> normalize */
+        *dst++ = 0x00;
+      } else {
+        *dst++ = b0;
+        *dst++ = b1;
+      }
+      break;
+    }
+    } /* switch */
   } /* for */
+
+  assert(labs(hs_text_short_mutf8_strlen(src0)) == (dst - dst0));
 }
