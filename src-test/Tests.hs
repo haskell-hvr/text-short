@@ -23,6 +23,16 @@ main = defaultMain tests
 tests :: TestTree
 tests = testGroup "Tests" [unitTests,qcProps]
 
+-- ShortText w/ in-bounds index
+data STI = STI IUT.ShortText Int
+         deriving (Eq,Show)
+
+instance Arbitrary STI where
+  arbitrary = do
+    t <- arbitrary
+    i <- choose (0, T.length t - 1)
+    return $! STI (IUT.fromText t) i
+
 qcProps :: TestTree
 qcProps = testGroup "Properties"
   [ QC.testProperty "length/fromText"   $ \t -> IUT.length (IUT.fromText t) == T.length t
@@ -59,6 +69,20 @@ qcProps = testGroup "Properties"
 
   , QC.testProperty "isSuffixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isSuffixOf` IUT.fromText t2  == t1 `T.isSuffixOf` t2
   , QC.testProperty "isPrefixOf" $ \t1 t2 -> IUT.fromText t1 `IUT.isPrefixOf` IUT.fromText t2  == t1 `T.isPrefixOf` t2
+
+  , QC.testProperty "stripPrefix" $ \t1 t2 -> IUT.stripPrefix (IUT.fromText t1) (IUT.fromText t2) ==
+                                                fmap IUT.fromText (T.stripPrefix t1 t2)
+
+  , QC.testProperty "stripSuffix" $ \t1 t2 -> IUT.stripSuffix (IUT.fromText t1) (IUT.fromText t2) ==
+                                                fmap IUT.fromText (T.stripSuffix t1 t2)
+
+  , QC.testProperty "stripPrefix 2" $ \(STI t i) ->
+      let (pfx,sfx) = IUT.splitAt i t
+      in IUT.stripPrefix pfx t == Just sfx
+
+  , QC.testProperty "stripSuffix 2" $ \(STI t i) ->
+      let (pfx,sfx) = IUT.splitAt i t
+      in IUT.stripSuffix sfx t == Just pfx
 
   , QC.testProperty "cons" $ \c t -> IUT.singleton c <> IUT.fromText t == IUT.cons c (IUT.fromText t)
   , QC.testProperty "snoc" $ \c t -> IUT.fromText t <> IUT.singleton c == IUT.snoc (IUT.fromText t) c

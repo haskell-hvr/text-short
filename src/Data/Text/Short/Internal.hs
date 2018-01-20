@@ -566,7 +566,7 @@ isPrefixOf x y
 -- @since TBD
 stripPrefix :: ShortText -> ShortText -> Maybe ShortText
 stripPrefix pfx t
-  | isPrefixOf pfx t = Just $! snd (Data.Text.Short.Internal.splitAt (toLength pfx) t)
+  | isPrefixOf pfx t = Just $! snd (splitAt' (toCSize pfx) t)
   | otherwise        = Nothing
 
 -- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a suffix of the second 'ShortText'
@@ -591,10 +591,10 @@ isSuffixOf x y
 -- @since TBD
 stripSuffix :: ShortText -> ShortText -> Maybe ShortText
 stripSuffix sfx t
-  | isSuffixOf sfx t = Just $! fst (Data.Text.Short.Internal.splitAt pfxLen t)
+  | isSuffixOf sfx t = Just $! fst (splitAt' pfxLen t)
   | otherwise        = Nothing
   where
-    pfxLen = toLength t - toLength sfx
+    pfxLen = toCSize t - toCSize sfx
 
 ----------------------------------------------------------------------------
 
