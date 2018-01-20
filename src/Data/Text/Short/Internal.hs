@@ -48,6 +48,7 @@ module Data.Text.Short.Internal
 
     , intersperse
     , intercalate
+    , reverse
 
       -- * Conversions
       -- ** 'Char'
@@ -112,7 +113,7 @@ import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
 import           Prelude                        hiding (all, any, break, length,
-                                                 null, span, splitAt)
+                                                 null, reverse, span, splitAt)
 import           System.IO.Unsafe
 import           Text.Printf                    (PrintfArg, formatArg,
                                                  formatString)
@@ -640,6 +641,33 @@ intersperse c st
 -- @since TBD
 intercalate :: ShortText -> [ShortText] -> ShortText
 intercalate sep ts = mconcat (List.intersperse sep ts)
+
+-- | \(\mathcal{O}(n)\) Reverse characters in 'ShortText'.
+--
+-- >>> reverse "star live desserts"
+-- "stressed evil rats"
+--
+-- prop> reverse (singleton c) == singleton c
+--
+-- prop> reverse (reverse t) == t
+--
+-- @since TBD
+reverse :: ShortText -> ShortText
+reverse st
+  | null st   = mempty
+  | sn == 1   = st
+  | otherwise = create sz $ go sn 0
+  where
+    sz = fromIntegral (toCSize st)
+    sn = length st
+
+    go 0 !_  _   = return ()
+    go i ofs mba = do
+      let cp   = readCodePoint st ofs
+          cpsz = cpLen cp
+          ofs' = ofs+cpsz
+      writeCodePointN cpsz mba (sz - fromIntegral ofs') cp
+      go (i-1) ofs' mba
 
 ----------------------------------------------------------------------------
 

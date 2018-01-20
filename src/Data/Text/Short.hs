@@ -57,6 +57,7 @@ module Data.Text.Short
 
     , intersperse
     , intercalate
+    , reverse
 
       -- * Conversions
       -- ** 'Char'

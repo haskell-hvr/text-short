@@ -64,6 +64,8 @@ qcProps = testGroup "Properties"
 
   , QC.testProperty "intersperse" $ \t c -> IUT.intersperse c (IUT.fromText t) == IUT.fromText (T.intersperse c t)
   , QC.testProperty "intercalate" $ \t1 t2 -> IUT.intercalate (IUT.fromText t1) (map IUT.fromText t2) == IUT.fromText (T.intercalate t1 t2)
+  , QC.testProperty "reverse.singleton" $ \c -> IUT.reverse (IUT.singleton c) == IUT.singleton c
+  , QC.testProperty "reverse"     $ \t -> IUT.reverse (IUT.fromText t) == IUT.fromText (T.reverse t)
 
   , QC.testProperty "splitAtEnd" $ \t ->
       let t' = IUT.fromText t
