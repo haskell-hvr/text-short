@@ -186,7 +186,7 @@ null = BSS.null . toShortByteString
 
 -- | \(\mathcal{O}(n)\) Count the number of Unicode code-points in a 'ShortText'.
 length :: ShortText -> Int
-length st = fromIntegral $ unsafePerformIO (c_text_short_length (toByteArray# st) (toCSize st))
+length st = fromIntegral $ unsafeDupablePerformIO (c_text_short_length (toByteArray# st) (toCSize st))
 
 foreign import ccall unsafe "hs_text_short_length" c_text_short_length :: ByteArray# -> CSize -> IO CSize
 
@@ -195,7 +195,7 @@ foreign import ccall unsafe "hs_text_short_length" c_text_short_length :: ByteAr
 -- This is a more efficient version of @'all' 'Data.Char.isAscii'@.
 --
 isAscii :: ShortText -> Bool
-isAscii st = (/= 0) $ unsafePerformIO (c_text_short_is_ascii (toByteArray# st) sz)
+isAscii st = (/= 0) $ unsafeDupablePerformIO (c_text_short_is_ascii (toByteArray# st) sz)
   where
     sz = toCSize st
 
@@ -447,7 +447,7 @@ indexEndMaybe st i
   | cp < 0x110000 = Just (chr (fromIntegral cp))
   | otherwise     = Nothing
   where
-    cp = unsafePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
+    cp = unsafeDupablePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
 
 foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev :: ByteArray# -> CSize -> CSize -> IO Word32
 
