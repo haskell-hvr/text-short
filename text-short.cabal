@@ -28,6 +28,7 @@ flag asserts
 
 library
   exposed-modules:     Data.Text.Short
+                       Data.Text.Short.Partial
                        Data.Text.Short.Unsafe
 
   other-modules:       Data.Text.Short.Internal
