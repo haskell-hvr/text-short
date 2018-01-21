@@ -100,7 +100,7 @@ import qualified Data.ByteString.Short.Internal as BSSI
 import           Data.Char                      (chr, ord)
 import           Data.Hashable                  (Hashable)
 import qualified Data.List                      as List
-import           Data.Maybe                     (fromMaybe)
+import           Data.Maybe                     (fromMaybe, isNothing)
 import           Data.Semigroup
 import qualified Data.String                    as S
 import qualified Data.Text                      as T
@@ -266,17 +266,7 @@ foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: By
 --
 -- @since 0.1.2
 all :: (Char -> Bool) -> ShortText -> Bool
-all p st = go (B 0)
-  where
-    go ofs
-      | ofs >= sz  = True
-      | otherwise  = let !cp = readCodePoint st ofs
-                         c = cp2ch cp
-                     in if p c
-                        then go (ofs+cpLen cp)
-                        else False
-
-    !sz = toB st
+all p st = isNothing (findOfs (not . p) st (B 0))
 
 -- | \(\mathcal{O}(n)\) Return the left-most codepoint in 'ShortText' that satisfies the given predicate.
 --
@@ -290,7 +280,7 @@ all p st = go (B 0)
 find :: (Char -> Bool) -> ShortText -> Maybe Char
 find p st = go 0
   where
-    go ofs
+    go !ofs
       | ofs >= sz  = Nothing
       | otherwise  = let !cp = readCodePoint st ofs
                          c = cp2ch cp
@@ -314,7 +304,7 @@ find p st = go 0
 findIndex :: (Char -> Bool) -> ShortText -> Maybe Int
 findIndex p st = go 0 0
   where
-    go ofs i
+    go !ofs !i
       | ofs >= sz  = Nothing
       | otherwise  = let !cp = readCodePoint st ofs
                      in if p (cp2ch cp)
@@ -329,14 +319,24 @@ findOfs :: (Char -> Bool) -> ShortText -> B -> Maybe B
 findOfs p st = go
   where
     go :: B -> Maybe B
-    go ofs
-      | ofs >= sz  = Nothing
-      | otherwise  = let !cp = readCodePoint st ofs
-                     in if p (cp2ch cp)
-                        then Just ofs
-                        else go (ofs+cpLen cp)
+    go !ofs | ofs >= sz  = Nothing
+    go !ofs | p (cp2ch cp) = Just ofs
+            | otherwise    = go (ofs+cpLen cp)
+      where
+        !cp = readCodePoint st ofs
 
     !sz = toB st
+
+{-# INLINE findOfsRev #-}
+findOfsRev :: (Char -> Bool) -> ShortText -> B -> Maybe B
+findOfsRev p st = go
+  where
+    go (B 0) = Nothing
+    go !ofs
+      | p (cp2ch cp) = Just ofs
+      | otherwise    = go (ofs-cpLen cp)
+      where
+        !cp = readCodePointRev st ofs
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into longest prefix satisfying the given predicate and the remaining suffix.
 --
@@ -347,16 +347,9 @@ findOfs p st = go
 --
 -- @since 0.1.2
 span :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
-span p st = splitAtOfs (go 0) st
-  where
-    go ofs | ofs >= sz  = ofs
-    go ofs
-      | p (cp2ch cp) = go (ofs+cpLen cp)
-      | otherwise    = ofs
-      where
-        !cp = readCodePoint st ofs
-
-    !sz = toB st
+span p st
+  | Just ofs <- findOfs (not . p) st (B 0) = splitAtOfs ofs st
+  | otherwise = (st,mempty)
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into longest suffix satisfying the given predicate and the preceding prefix.
 --
@@ -367,16 +360,9 @@ span p st = splitAtOfs (go 0) st
 --
 -- @since 0.1.2
 spanEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
-spanEnd p st = splitAtOfs (go sz) st
-  where
-    go 0 = 0
-    go ofs
-      | p (cp2ch cp) = go (ofs-cpLen cp)
-      | otherwise                 = ofs
-      where
-        !cp = readCodePointRev st ofs
-
-    !sz = toB st
+spanEnd p st
+  | Just ofs <- findOfsRev (not . p) st (toB st) = splitAtOfs ofs st
+  | otherwise = (mempty,st)
 
 ----------------------------------------------------------------------------
 
