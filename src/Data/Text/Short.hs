@@ -24,39 +24,39 @@ module Data.Text.Short
       ShortText
 
       -- * Basic operations
+      -- ** Construction
+    , empty
+    , singleton
     , pack
-    , unpack
     , append
     , concat
-    , empty
+    , cons
+    , snoc
+
+      -- ** Deconstruction
+    , unpack
+    , uncons
+    , unsnoc
+
+      -- ** Querying & predicates
     , null
     , length
     , isAscii
+    , all
+    , any
+    , find
+    , isPrefixOf
+    , isSuffixOf
+
+      -- ** Lookup & indexing
     , (!?)
     , indexMaybe
     , indexEndMaybe
-    , splitAt
-    , splitAtEnd
-    , isPrefixOf
-    , stripPrefix
-    , isSuffixOf
-    , stripSuffix
-
-    , cons
-    , uncons
-    , snoc
-    , unsnoc
-
     , findIndex
-    , find
-    , all
-    , any
 
-    , span
-    , break
-    , spanEnd
-    , breakEnd
 
+      -- * Splitting 'ShortText's
+      -- ** Basic functions
     , take
     , takeEnd
     , drop
@@ -66,14 +66,24 @@ module Data.Text.Short
     , dropWhile
     , dropWhileEnd
 
+      -- ** Pair-valued functions
+    , splitAt
+    , splitAtEnd
+    , span
+    , break
+    , spanEnd
+    , breakEnd
+
+      -- ** Suffix & Prefix operations
+    , stripPrefix
+    , stripSuffix
+
+      -- * Transformations
     , intersperse
     , intercalate
     , reverse
 
       -- * Conversions
-      -- ** 'Char'
-    , singleton
-
       -- ** 'String'
     , fromString
     , toString
