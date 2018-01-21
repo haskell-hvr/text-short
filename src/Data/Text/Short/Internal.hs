@@ -99,6 +99,7 @@ import qualified Data.ByteString.Short.Internal as BSSI
 import           Data.Char                      (chr, ord)
 import           Data.Hashable                  (Hashable)
 import qualified Data.List                      as List
+import           Data.Maybe                     (fromMaybe)
 import           Data.Semigroup
 import qualified Data.String                    as S
 import qualified Data.Text                      as T
@@ -906,7 +907,32 @@ reverse st
 --
 -- @since 0.1.2
 filter :: (Char -> Bool) -> ShortText -> ShortText
-filter p t = fromString [ c | c <- toString t, p c ]
+filter p t
+  = case (mofs1,mofs2) of
+      (Nothing,   _)       -> t -- no non-accepted characters found
+      (Just 0,    Nothing) -> mempty -- no accepted characters found
+      (Just ofs1, Nothing) -> slice t 0 ofs1 -- only prefix accepted
+      (Just ofs1, Just ofs2) -> createShrink (t0sz-(ofs2-ofs1)) $ \mba -> do
+        -- copy accepted prefix
+        copyByteArray t 0 mba 0 ofs1
+        -- [ofs1 .. ofs2) are a non-accepted region
+        -- filter rest after ofs2
+        t1sz <- go mba ofs2 ofs1
+        return t1sz
+  where
+    mofs1 = findOfs (not . p) t 0 -- first non-accepted Char
+    mofs2 = findOfs p t (fromMaybe 0 mofs1) -- first accepted Char
+
+    t0sz = toB t
+
+    go mba !t0ofs !t1ofs
+      | t0ofs >= t0sz = return t1ofs
+      | otherwise = let !cp = readCodePoint t t0ofs
+                        !cpsz = cpLen cp
+                    in if p (cp2ch cp)
+                       then writeCodePointN cpsz mba t1ofs cp >>
+                            go mba (t0ofs+cpsz) (t1ofs+cpsz)
+                       else go mba (t0ofs+cpsz) t1ofs -- skip code-point
 
 ----------------------------------------------------------------------------
 
@@ -951,6 +977,15 @@ create n go = runST $ do
   go mba
   unsafeFreeze mba
 
+{-# INLINE createShrink #-}
+createShrink :: B -> (forall s. MBA s -> ST s B) -> ShortText
+createShrink n go = runST $ do
+  mba <- newByteArray n
+  n' <- go mba
+  if n' < n
+    then unsafeFreezeShrink mba n'
+    else unsafeFreeze mba
+
 {-# INLINE unsafeFreeze #-}
 unsafeFreeze :: MBA s -> ST s ShortText
 unsafeFreeze (MBA# mba#)
@@ -980,6 +1015,38 @@ copyAddrToByteArray :: Ptr a -> MBA RealWorld -> B -> B -> ST RealWorld ()
 copyAddrToByteArray (Ptr src#) (MBA# dst#) (B (I# dst_off#)) (B (I# len#))
   = ST $ \s -> case GHC.Exts.copyAddrToByteArray# src# dst# dst_off# len# s of
                  s' -> (# s', () #)
+
+----------------------------------------------------------------------------
+-- unsafeFreezeShrink
+
+#if __GLASGOW_HASKELL__ >= 710
+-- for GHC versions which have the 'shrinkMutableByteArray#' primop
+{-# INLINE unsafeFreezeShrink #-}
+unsafeFreezeShrink :: MBA s -> B -> ST s ShortText
+unsafeFreezeShrink mba n = do
+  shrink mba n
+  unsafeFreeze mba
+
+{-# INLINE shrink #-}
+shrink :: MBA s -> B -> ST s ()
+shrink (MBA# mba#) (B (I# i#))
+  = ST $ \s -> case GHC.Exts.shrinkMutableByteArray# mba# i# s of
+                 s' -> (# s', () #)
+#else
+-- legacy code for GHC versions which lack `shrinkMutableByteArray#` primop
+{-# INLINE unsafeFreezeShrink #-}
+unsafeFreezeShrink :: MBA s -> B -> ST s ShortText
+unsafeFreezeShrink mba0 n = do
+  mba' <- newByteArray n
+  copyByteArray2 mba0 0 mba' 0 n
+  unsafeFreeze mba'
+
+{-# INLINE copyByteArray2 #-}
+copyByteArray2 :: MBA s -> B -> MBA s -> B -> B -> ST s ()
+copyByteArray2 (MBA# src#) (B (I# src_off#)) (MBA# dst#) (B (I# dst_off#)) (B( I# len#))
+  = ST $ \s -> case GHC.Exts.copyMutableByteArray# src# src_off# dst# dst_off# len# s of
+                 s' -> (# s', () #)
+#endif
 
 ----------------------------------------------------------------------------
 -- Helpers for encoding code points into UTF-8 code units
