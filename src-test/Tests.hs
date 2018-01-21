@@ -14,6 +14,7 @@ import           Test.QuickCheck.Instances ()
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck     as QC
+import           Text.Show.Functions       ()
 
 fromByteStringRef = either (const Nothing) (Just . IUT.fromText) . T.decodeUtf8'
 
@@ -74,6 +75,7 @@ qcProps = testGroup "Properties"
   , QC.testProperty "intercalate" $ \t1 t2 -> IUT.intercalate (IUT.fromText t1) (map IUT.fromText t2) == IUT.fromText (T.intercalate t1 t2)
   , QC.testProperty "reverse.singleton" $ \c -> IUT.reverse (IUT.singleton c) == IUT.singleton c
   , QC.testProperty "reverse"     $ \t -> IUT.reverse (IUT.fromText t) == IUT.fromText (T.reverse t)
+  , QC.testProperty "filter"      $ \p t -> IUT.filter p (IUT.fromText t) == IUT.fromText (T.filter p t)
 
   , QC.testProperty "splitAtEnd" $ \t ->
       let t' = IUT.fromText t

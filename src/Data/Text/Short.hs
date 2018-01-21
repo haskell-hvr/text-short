@@ -82,6 +82,7 @@ module Data.Text.Short
     , intersperse
     , intercalate
     , reverse
+    , filter
 
       -- * Conversions
       -- ** 'String'

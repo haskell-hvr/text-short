@@ -51,6 +51,7 @@ module Data.Text.Short.Internal
     , intersperse
     , intercalate
     , reverse
+    , filter
 
       -- * Conversions
       -- ** 'Char'
@@ -116,10 +117,10 @@ import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
 import           Prelude                        hiding (all, any, break, concat,
-                                                 drop, dropWhile, head, init,
-                                                 last, length, null, reverse,
-                                                 span, splitAt, tail, take,
-                                                 takeWhile)
+                                                 drop, dropWhile, filter, head,
+                                                 init, last, length, null,
+                                                 reverse, span, splitAt, tail,
+                                                 take, takeWhile)
 import           System.IO.Unsafe
 import           Text.Printf                    (PrintfArg, formatArg,
                                                  formatString)
@@ -209,6 +210,8 @@ instance Binary ShortText where
 --
 -- prop> null (singleton c) == False
 --
+-- prop> null t == (length t == 0)
+--
 -- @since 0.1
 null :: ShortText -> Bool
 null = BSS.null . toShortByteString
@@ -221,7 +224,7 @@ null = BSS.null . toShortByteString
 -- >>> length ""
 -- 0
 --
--- prop> length (singleton c) == 1
+-- prop> length t >= 0
 --
 -- @since 0.1
 length :: ShortText -> Int
@@ -869,6 +872,24 @@ reverse st
       writeCodePointN cpsz mba (sz - fromIntegral ofs') cp
       go (i-1) ofs' mba
 
+
+-- | \(\mathcal{O}(n)\) Remove characters from 'ShortText' which don't satisfy given predicate.
+--
+-- >>> filter (`notElem` ['a','e','i','o','u']) "You don't need vowels to convey information!"
+-- "Y dn't nd vwls t cnvy nfrmtn!"
+--
+-- prop> filter (const False) t == ""
+--
+-- prop> filter (const True) t == t
+--
+-- prop> length (filter p t) <= length t
+--
+-- prop> filter p t == pack [ c | c <- unpack t, p c ]
+--
+-- @since 0.1.2
+filter :: (Char -> Bool) -> ShortText -> ShortText
+filter p t = fromString [ c | c <- toString t, p c ]
+
 ----------------------------------------------------------------------------
 
 -- | Construct a new 'ShortText' from an existing one by slicing
@@ -951,6 +972,10 @@ cpLen cp
   | otherwise     = 4
 
 -- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
+--
+-- prop> singleton c == pack [c]
+--
+-- prop> length (singleton c) == 1
 --
 -- >>> singleton 'A'
 -- "A"
@@ -1135,6 +1160,7 @@ foreign import ccall unsafe "hs_text_short_mutf8_trans" c_text_short_mutf8_trans
 
 -- $setup
 -- >>> :set -XOverloadedStrings
+-- >>> import Data.Text.Short (pack, unpack)
 -- >>> import Text.Show.Functions ()
 -- >>> import qualified Test.QuickCheck.Arbitrary as QC
 -- >>> import Test.QuickCheck.Instances ()
