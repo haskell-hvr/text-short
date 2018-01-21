@@ -14,7 +14,7 @@
 --
 -- The use of these functions is discouraged as they tend to be error-prone.
 --
--- @since TBD
+-- @since 0.1.2
 module Data.Text.Short.Partial
     ( head
     , tail
@@ -36,7 +36,7 @@ import           Prelude                  ()
 -- Consider using the total functions 'uncons' or 'indexMaybe'
 -- instead.
 --
--- @since TBD
+-- @since 0.1.2
 head :: ShortText -> Char
 head = maybe (error "head: empty ShortText") fst . uncons
 
@@ -48,7 +48,7 @@ head = maybe (error "head: empty ShortText") fst . uncons
 -- __Note__: Will throw an 'error' exception for empty 'ShortText's.
 -- Consider using the total functions 'uncons' or 'drop' instead.
 --
--- @since TBD
+-- @since 0.1.2
 tail :: ShortText -> ShortText
 tail = maybe (error "tail: empty ShortText") snd . uncons
 
@@ -60,7 +60,7 @@ tail = maybe (error "tail: empty ShortText") snd . uncons
 -- __Note__: Will throw an 'error' exception for empty 'ShortText's.
 -- Consider using the total functions 'unsnoc' or 'dropEnd' instead.
 --
--- @since TBD
+-- @since 0.1.2
 init :: ShortText -> ShortText
 init = maybe (error "init: empty ShortText") fst . unsnoc
 
@@ -73,7 +73,7 @@ init = maybe (error "init: empty ShortText") fst . unsnoc
 -- Consider using the total functions 'unsnoc' or 'indexEndMaybe'
 -- instead.
 --
--- @since TBD
+-- @since 0.1.2
 last :: ShortText -> Char
 last = maybe (error "last: empty ShortText") snd . unsnoc
 
@@ -86,7 +86,7 @@ last = maybe (error "last: empty ShortText") snd . unsnoc
 -- bounds.  Consider using the total functions 'indexMaybe' or
 -- 'indexEndMaybe' instead.
 --
--- @since TBD
+-- @since 0.1.2
 index :: ShortText -> Int -> Char
 index st i = case indexMaybe st i of
                Nothing -> error "index: not within ShortText"

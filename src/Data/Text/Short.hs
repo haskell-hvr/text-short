@@ -106,7 +106,7 @@ import           Prelude                  ()
 --
 -- prop> fst (break p t) <> snd (break p t) == t
 --
--- @since TBD
+-- @since 0.1.2
 break :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
 break p st = span (not . p) st
 
@@ -119,7 +119,7 @@ break p st = span (not . p) st
 --
 -- prop> fst (breakEnd p t) <> snd (breakEnd p t) == t
 --
--- @since TBD
+-- @since 0.1.2
 breakEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
 breakEnd p st = spanEnd (not . p) st
 
@@ -130,7 +130,7 @@ breakEnd p st = spanEnd (not . p) st
 -- >>> "abcdefg" !? 2
 -- Just 'c'
 --
--- @since TBD
+-- @since 0.1.2
 (!?) :: ShortText -> Int -> Maybe Char
 (!?) = indexMaybe
 
@@ -147,7 +147,7 @@ breakEnd p st = spanEnd (not . p) st
 --
 -- prop> any p t == not (all (not . p) t)
 --
--- @since TBD
+-- @since 0.1.2
 any :: (Char -> Bool) -> ShortText -> Bool
 any p st = case find p st of
              Nothing -> False
@@ -162,7 +162,7 @@ any p st = case find p st of
 --
 -- prop> length (append t1 t2) == length t1 + length t2
 --
--- @since TBD
+-- @since 0.1.2
 append :: ShortText -> ShortText -> ShortText
 append = (<>)
 
@@ -176,7 +176,7 @@ append = (<>)
 -- >>> concat ["foo","bar","doo"]
 -- "foobardoo"
 --
--- @since TBD
+-- @since 0.1.2
 concat :: [ShortText] -> ShortText
 concat = mconcat
 
@@ -190,7 +190,7 @@ concat = mconcat
 -- >>> null empty
 -- True
 --
--- @since TBD
+-- @since 0.1.2
 empty :: ShortText
 empty = mempty
 
@@ -198,7 +198,7 @@ empty = mempty
 --
 -- This is an alias for 'fromString'.
 --
--- @since TBD
+-- @since 0.1.2
 pack :: [Char] -> ShortText
 pack = fromString
 
@@ -208,7 +208,7 @@ pack = fromString
 --
 -- prop> (pack . unpack) t == t
 --
--- @since TBD
+-- @since 0.1.2
 unpack :: ShortText -> [Char]
 unpack = toString
 
@@ -220,7 +220,7 @@ unpack = toString
 -- >>> take 3 "ab"
 -- "ab"
 --
--- @since TBD
+-- @since 0.1.2
 take :: Int -> ShortText -> ShortText
 take n = fst . splitAt n
 
@@ -232,7 +232,7 @@ take n = fst . splitAt n
 -- >>> takeEnd 3 "ab"
 -- "ab"
 --
--- @since TBD
+-- @since 0.1.2
 takeEnd :: Int -> ShortText -> ShortText
 takeEnd n = snd . splitAtEnd n
 
@@ -244,7 +244,7 @@ takeEnd n = snd . splitAtEnd n
 -- >>> drop 4 "ab"
 -- ""
 --
--- @since TBD
+-- @since 0.1.2
 drop :: Int -> ShortText -> ShortText
 drop n = snd . splitAt n
 
@@ -256,7 +256,7 @@ drop n = snd . splitAt n
 -- >>> drop 4 "ab"
 -- ""
 --
--- @since TBD
+-- @since 0.1.2
 dropEnd :: Int -> ShortText -> ShortText
 dropEnd n = fst . splitAtEnd n
 
@@ -267,7 +267,7 @@ dropEnd n = fst . splitAtEnd n
 -- >>> takeWhile (< 'c') "abcdabcd"
 -- "ab"
 --
--- @since TBD
+-- @since 0.1.2
 takeWhile :: (Char -> Bool) -> ShortText -> ShortText
 takeWhile p = fst . span p
 
@@ -278,7 +278,7 @@ takeWhile p = fst . span p
 -- >>> takeWhileEnd (>= 'c') "abcdabcd"
 -- "cd"
 --
--- @since TBD
+-- @since 0.1.2
 takeWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
 takeWhileEnd p = snd . spanEnd p
 
@@ -289,7 +289,7 @@ takeWhileEnd p = snd . spanEnd p
 -- >>> dropWhile (< 'c') "abcdabcd"
 -- "cdabcd"
 --
--- @since TBD
+-- @since 0.1.2
 dropWhile :: (Char -> Bool) -> ShortText -> ShortText
 dropWhile p = snd . span p
 
@@ -300,7 +300,7 @@ dropWhile p = snd . span p
 -- >>> dropWhileEnd (>= 'c') "abcdabcd"
 -- "abcdab"
 --
--- @since TBD
+-- @since 0.1.2
 dropWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
 dropWhileEnd p = fst . spanEnd p
 

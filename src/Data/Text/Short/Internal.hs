@@ -178,7 +178,7 @@ instance Show ShortText where
 instance Read ShortText where
     readsPrec p = map (\(x,s) -> (ShortText $ encodeStringShort utf8 x,s)) . readsPrec p
 
--- | @since TBD
+-- | @since 0.1.2
 instance PrintfArg ShortText where
   formatArg txt = formatString $ toString txt
 
@@ -263,7 +263,7 @@ foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: By
 -- >>> all (/= 'c') "abdabd"
 -- True
 --
--- @since TBD
+-- @since 0.1.2
 all :: (Char -> Bool) -> ShortText -> Bool
 all p st = go 0
   where
@@ -285,7 +285,7 @@ all p st = go 0
 -- >>> find (> 'b') "ababab"
 -- Nothing
 --
--- @since TBD
+-- @since 0.1.2
 find :: (Char -> Bool) -> ShortText -> Maybe Char
 find p st = go 0
   where
@@ -309,7 +309,7 @@ find p st = go 0
 --
 -- prop> (indexMaybe t =<< findIndex p t) == find p t
 --
--- @since TBD
+-- @since 0.1.2
 findIndex :: (Char -> Bool) -> ShortText -> Maybe Int
 findIndex p st = go 0 0
   where
@@ -329,7 +329,7 @@ findIndex p st = go 0 0
 --
 -- prop> fst (span p t) <> snd (span p t) == t
 --
--- @since TBD
+-- @since 0.1.2
 span :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
 span p st = splitAt' (go 0) st
   where
@@ -349,7 +349,7 @@ span p st = splitAt' (go 0) st
 --
 -- prop> fst (spanEnd p t) <> snd (spanEnd p t) == t
 --
--- @since TBD
+-- @since 0.1.2
 spanEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
 spanEnd p st = splitAt' (go sz) st
   where
@@ -561,7 +561,7 @@ foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteA
 --
 -- prop> indexMaybe mempty i == Nothing
 --
--- @since TBD
+-- @since 0.1.2
 indexMaybe :: ShortText -> Int -> Maybe Char
 indexMaybe st i
   | i < 0         = Nothing
@@ -580,7 +580,7 @@ indexMaybe st i
 --
 -- prop> indexEndMaybe mempty i == Nothing
 --
--- @since TBD
+-- @since 0.1.2
 indexEndMaybe :: ShortText -> Int -> Maybe Char
 indexEndMaybe st i
   | i < 0         = Nothing
@@ -609,7 +609,7 @@ foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev 
 -- >>> splitAt (-1) "abcdef"
 -- ("","abcdef")
 --
--- @since TBD
+-- @since 0.1.2
 splitAt :: Int -> ShortText -> (ShortText,ShortText)
 splitAt i st
   | i <= 0    = (mempty,st)
@@ -637,7 +637,7 @@ splitAt i st
 -- >>> splitAtEnd (-1) "abcdef"
 -- ("abcdef","")
 --
--- @since TBD
+-- @since 0.1.2
 splitAtEnd :: Int -> ShortText -> (ShortText,ShortText)
 splitAtEnd i st
   | i <= 0      = (st,mempty)
@@ -673,7 +673,7 @@ foreign import ccall unsafe "hs_text_short_index_ofs_rev" c_text_short_index_ofs
 -- >>> uncons "fmap"
 -- Just ('f',"map")
 --
--- @since TBD
+-- @since 0.1.2
 uncons :: ShortText -> Maybe (Char,ShortText)
 uncons st
   | null st    = Nothing
@@ -697,7 +697,7 @@ uncons st
 -- >>> unsnoc "fmap"
 -- Just ("fma",'p')
 --
--- @since TBD
+-- @since 0.1.2
 unsnoc :: ShortText -> Maybe (ShortText,Char)
 unsnoc st
   | null st    = Nothing
@@ -721,7 +721,7 @@ unsnoc st
 --
 -- prop> isPrefixOf t t == True
 --
--- @since TBD
+-- @since 0.1.2
 isPrefixOf :: ShortText -> ShortText -> Bool
 isPrefixOf x y
   | lx > ly = False
@@ -743,7 +743,7 @@ isPrefixOf x y
 -- >>> stripPrefix "test-" "text-short"
 -- Nothing
 --
--- @since TBD
+-- @since 0.1.2
 stripPrefix :: ShortText -> ShortText -> Maybe ShortText
 stripPrefix pfx t
   | isPrefixOf pfx t = Just $! snd (splitAt' (toCSize pfx) t)
@@ -761,7 +761,7 @@ stripPrefix pfx t
 --
 -- prop> isSuffixOf t t == True
 --
--- @since TBD
+-- @since 0.1.2
 isSuffixOf :: ShortText -> ShortText -> Bool
 isSuffixOf x y
   | lx > ly = False
@@ -784,7 +784,7 @@ isSuffixOf x y
 -- >>> stripSuffix "-utf8" "text-short"
 -- Nothing
 --
--- @since TBD
+-- @since 0.1.2
 stripSuffix :: ShortText -> ShortText -> Maybe ShortText
 stripSuffix sfx t
   | isSuffixOf sfx t = Just $! fst (splitAt' pfxLen t)
@@ -802,7 +802,7 @@ stripSuffix sfx t
 -- >>> intersperse '*' "MASH"
 -- "M*A*S*H"
 --
--- @since TBD
+-- @since 0.1.2
 intersperse :: Char -> ShortText -> ShortText
 intersperse c st
   | null st = mempty
@@ -838,7 +838,7 @@ intersperse c st
 -- >>> intercalate ", " ["foo","bar","doo"]
 -- "foo, bar, doo"
 --
--- @since TBD
+-- @since 0.1.2
 intercalate :: ShortText -> [ShortText] -> ShortText
 intercalate sep ts = mconcat (List.intersperse sep ts)
 
@@ -851,7 +851,7 @@ intercalate sep ts = mconcat (List.intersperse sep ts)
 --
 -- prop> reverse (reverse t) == t
 --
--- @since TBD
+-- @since 0.1.2
 reverse :: ShortText -> ShortText
 reverse st
   | null st   = mempty
@@ -960,7 +960,7 @@ cpLen cp
 --
 -- __Note__: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
 --
--- @since TBD
+-- @since 0.1.2
 singleton :: Char -> ShortText
 singleton = singleton' . ch2cp
 
@@ -977,7 +977,7 @@ singleton' cp
 --
 -- prop> cons c t == singleton c <> t
 --
--- @since TBD
+-- @since 0.1.2
 cons :: Char -> ShortText -> ShortText
 cons (ch2cp -> cp) sfx
   | n == 0        = singleton' cp
@@ -995,7 +995,7 @@ cons (ch2cp -> cp) sfx
 --
 -- prop> snoc t c == t <> singleton c
 --
--- @since TBD
+-- @since 0.1.2
 snoc :: ShortText -> Char -> ShortText
 snoc pfx (ch2cp -> cp)
   | n == 0        = singleton' cp
