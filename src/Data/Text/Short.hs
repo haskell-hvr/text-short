@@ -8,6 +8,17 @@
 -- Stability   : stable
 --
 -- Memory-efficient representation of Unicode text strings.
+--
+-- This module is intended to be imported @qualified@, to avoid name
+-- clashes with "Prelude" functions, e.g.
+--
+-- > import qualified Data.Text.Short as TS
+-- > import qualified Data.Text.Short (ShortText)
+--
+-- This modules deliberately omits (common) partial functions, which
+-- can be found in "Data.Text.Short.Partial" instead.
+--
+-- @since 0.1
 module Data.Text.Short
     ( -- * The 'ShortText' type
       ShortText
@@ -84,12 +95,16 @@ module Data.Text.Short
 
 import           Data.Semigroup
 import           Data.Text.Short.Internal
-import           Prelude                  (Bool (..), Char, Int, Maybe (..),
-                                           fst, not, snd, (.))
+import           Prelude                  ()
 
 -- | \(\mathcal{O}(n)\) Variant of 'span' with negated predicate.
 --
--- > break p = span (not . p)
+-- >>> break (> 'c') "abcdabcd"
+-- ("abc","dabcd")
+--
+-- prop> break p t == span (not . p) t
+--
+-- prop> fst (break p t) <> snd (break p t) == t
 --
 -- @since TBD
 break :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
@@ -97,7 +112,12 @@ break p st = span (not . p) st
 
 -- | \(\mathcal{O}(n)\) Variant of 'spanEnd' with negated predicate.
 --
--- > breakEnd p = spanEnd (not . p)
+-- >>> breakEnd (< 'c') "abcdabcd"
+-- ("abcdab","cd")
+--
+-- prop> breakEnd p t == spanEnd (not . p) t
+--
+-- prop> fst (breakEnd p t) <> snd (breakEnd p t) == t
 --
 -- @since TBD
 breakEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
@@ -107,11 +127,25 @@ breakEnd p st = spanEnd (not . p) st
 --
 -- Infix operator alias of 'indexMaybe'
 --
+-- >>> "abcdefg" !? 2
+-- Just 'c'
+--
 -- @since TBD
 (!?) :: ShortText -> Int -> Maybe Char
 (!?) = indexMaybe
 
 -- | \(\mathcal{O}(n)\) Test whether /any/ code points in 'ShortText' satisfy a predicate.
+--
+-- >>> any (> 'c') "abcdabcd"
+-- True
+--
+-- >>> any (const True) ""
+-- False
+--
+-- >>> any (== 'c') "abdabd"
+-- False
+--
+-- prop> any p t == not (all (not . p) t)
 --
 -- @since TBD
 any :: (Char -> Bool) -> ShortText -> Bool
@@ -123,6 +157,11 @@ any p st = case find p st of
 --
 -- This is a type-specialised alias of '<>'.
 --
+-- >>> append "foo" "bar"
+-- "foobar"
+--
+-- prop> length (append t1 t2) == length t1 + length t2
+--
 -- @since TBD
 append :: ShortText -> ShortText -> ShortText
 append = (<>)
@@ -131,6 +170,12 @@ append = (<>)
 --
 -- This is a type-specialised alias of 'mconcat'.
 --
+-- >>> concat []
+-- ""
+--
+-- >>> concat ["foo","bar","doo"]
+-- "foobardoo"
+--
 -- @since TBD
 concat :: [ShortText] -> ShortText
 concat = mconcat
@@ -138,6 +183,12 @@ concat = mconcat
 -- | \(\mathcal{O}(0)\) The /empty/ 'ShortText'.
 --
 -- This is a type-specialised alias of 'mempty'.
+--
+-- >>> empty
+-- ""
+--
+-- >>> null empty
+-- True
 --
 -- @since TBD
 empty :: ShortText
@@ -155,11 +206,19 @@ pack = fromString
 --
 -- This is an alias for 'toString'.
 --
+-- prop> (pack . unpack) t == t
+--
 -- @since TBD
 unpack :: ShortText -> [Char]
 unpack = toString
 
 -- | \(\mathcal{O}(n)\) Take prefix of given length or return whole 'ShortText' if too short.
+--
+-- >>> take 3 "abcdef"
+-- "abc"
+--
+-- >>> take 3 "ab"
+-- "ab"
 --
 -- @since TBD
 take :: Int -> ShortText -> ShortText
@@ -167,11 +226,23 @@ take n = fst . splitAt n
 
 -- | \(\mathcal{O}(n)\) Take suffix of given length or return whole 'ShortText' if too short.
 --
+-- >>> takeEnd 3 "abcdefg"
+-- "efg"
+--
+-- >>> takeEnd 3 "ab"
+-- "ab"
+--
 -- @since TBD
 takeEnd :: Int -> ShortText -> ShortText
 takeEnd n = snd . splitAtEnd n
 
 -- | \(\mathcal{O}(n)\) Take remove prefix of given length from 'ShortText' or return 'empty' 'ShortText' if too short.
+--
+-- >>> drop 4 "abcdef"
+-- "ef"
+--
+-- >>> drop 4 "ab"
+-- ""
 --
 -- @since TBD
 drop :: Int -> ShortText -> ShortText
@@ -179,11 +250,22 @@ drop n = snd . splitAt n
 
 -- | \(\mathcal{O}(n)\) Take remove suffix of given length from 'ShortText' or return 'empty' 'ShortText' if too short.
 --
+-- >>> drop 4 "abcdefghi"
+-- "efghi"
+--
+-- >>> drop 4 "ab"
+-- ""
+--
 -- @since TBD
 dropEnd :: Int -> ShortText -> ShortText
 dropEnd n = fst . splitAtEnd n
 
 -- | \(\mathcal{O}(n)\) Take longest prefix satisfying given predicate.
+--
+-- prop> takeWhile p t == fst (span p t)
+--
+-- >>> takeWhile (< 'c') "abcdabcd"
+-- "ab"
 --
 -- @since TBD
 takeWhile :: (Char -> Bool) -> ShortText -> ShortText
@@ -191,11 +273,21 @@ takeWhile p = fst . span p
 
 -- | \(\mathcal{O}(n)\) Take longest suffix satisfying given predicate.
 --
+-- prop> takeWhileEnd p t == snd (spanEnd p t)
+--
+-- >>> takeWhileEnd (>= 'c') "abcdabcd"
+-- "cd"
+--
 -- @since TBD
 takeWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
 takeWhileEnd p = snd . spanEnd p
 
 -- | \(\mathcal{O}(n)\) Remove longest prefix satisfying given predicate.
+--
+-- prop> dropWhile p t == snd (span p t)
+--
+-- >>> dropWhile (< 'c') "abcdabcd"
+-- "cdabcd"
 --
 -- @since TBD
 dropWhile :: (Char -> Bool) -> ShortText -> ShortText
@@ -203,6 +295,17 @@ dropWhile p = snd . span p
 
 -- | \(\mathcal{O}(n)\) Remove longest suffix satisfying given predicate.
 --
+-- prop> dropWhileEnd p t == fst (spanEnd p t)
+--
+-- >>> dropWhileEnd (>= 'c') "abcdabcd"
+-- "abcdab"
+--
 -- @since TBD
 dropWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
 dropWhileEnd p = fst . spanEnd p
+
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import Text.Show.Functions ()
+-- >>> import qualified Test.QuickCheck.Arbitrary as QC
+-- >>> instance QC.Arbitrary ShortText where { arbitrary = fmap fromString QC.arbitrary }

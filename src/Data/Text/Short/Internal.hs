@@ -17,6 +17,8 @@
 -- Stability   : stable
 --
 -- Memory-efficient representation of Unicode text strings.
+--
+-- @since 0.1
 module Data.Text.Short.Internal
     ( -- * The 'ShortText' type
       ShortText(..)
@@ -78,7 +80,7 @@ module Data.Text.Short.Internal
 
     , BS.ByteString
     , T.Text
-    , Char
+    , module Prelude
 
       -- ** Internals
     , isValidUtf8
@@ -113,8 +115,11 @@ import           GHC.Exts                       (Addr#, ByteArray#, Int (I#),
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
-import           Prelude                        hiding (all, any, break, length,
-                                                 null, reverse, span, splitAt)
+import           Prelude                        hiding (all, any, break, concat,
+                                                 drop, dropWhile, head, init,
+                                                 last, length, null, reverse,
+                                                 span, splitAt, tail, take,
+                                                 takeWhile)
 import           System.IO.Unsafe
 import           Text.Printf                    (PrintfArg, formatArg,
                                                  formatString)
@@ -123,6 +128,10 @@ import qualified PrimOps
 
 -- | A compact representation of Unicode strings.
 --
+-- A 'ShortText' value is a sequence of Unicode scalar values, as defined in
+-- <http://www.unicode.org/versions/Unicode5.2.0/ch03.pdf#page=35 §3.9, definition D76 of the Unicode 5.2 standard >;
+-- This means that a 'ShortText' is a list of (scalar) Unicode code-points (i.e. code-points in the range @[U+00 .. U+D7FF] ∪ [U+E000 .. U+10FFFF]@).
+--
 -- This type relates to 'T.Text' as 'ShortByteString' relates to 'BS.ByteString' by providing a more compact type. Please consult the documentation of "Data.ByteString.Short" for more information.
 --
 -- Currently, a boxed unshared 'T.Text' has a memory footprint of 6 words (i.e. 48 bytes on 64-bit systems) plus 2 or 4 bytes per code-point (due to the internal UTF-16 representation). Each 'T.Text' value which can share its payload with another 'T.Text' requires only 4 words additionally. Unlike 'BS.ByteString', 'T.Text' use unpinned memory.
@@ -130,6 +139,7 @@ import qualified PrimOps
 -- In comparison, the footprint of a boxed 'ShortText' is only 4 words (i.e. 32 bytes on 64-bit systems) plus 1, 2, 3, or 4 bytes per code-point (due to the internal UTF-8 representation).
 -- It can be shown that for realistic data <http://utf8everywhere.org/#asian UTF-16 has a space overhead of 50% over UTF-8>.
 --
+-- @since 0.1
 newtype ShortText = ShortText ShortByteString
                   deriving (Monoid,Data.Semigroup.Semigroup,Hashable,NFData)
 
@@ -193,10 +203,27 @@ instance Binary ShortText where
 #endif
 
 -- | \(\mathcal{O}(1)\) Test whether a 'ShortText' is empty.
+--
+-- >>> null ""
+-- True
+--
+-- prop> null (singleton c) == False
+--
+-- @since 0.1
 null :: ShortText -> Bool
 null = BSS.null . toShortByteString
 
 -- | \(\mathcal{O}(n)\) Count the number of Unicode code-points in a 'ShortText'.
+--
+-- >>> length "abcd€"
+-- 5
+--
+-- >>> length ""
+-- 0
+--
+-- prop> length (singleton c) == 1
+--
+-- @since 0.1
 length :: ShortText -> Int
 length st = fromIntegral $ unsafeDupablePerformIO (c_text_short_length (toByteArray# st) (toCSize st))
 
@@ -206,6 +233,18 @@ foreign import ccall unsafe "hs_text_short_length" c_text_short_length :: ByteAr
 --
 -- This is a more efficient version of @'all' 'Data.Char.isAscii'@.
 --
+-- >>> isAscii ""
+-- True
+--
+-- >>> isAscii "abc\NUL"
+-- True
+--
+-- >>> isAscii "abcd€"
+-- False
+--
+-- prop> isAscii t == all (< '\x80') t
+--
+-- @since 0.1
 isAscii :: ShortText -> Bool
 isAscii st = (/= 0) $ unsafeDupablePerformIO (c_text_short_is_ascii (toByteArray# st) sz)
   where
@@ -214,6 +253,15 @@ isAscii st = (/= 0) $ unsafeDupablePerformIO (c_text_short_is_ascii (toByteArray
 foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: ByteArray# -> CSize -> IO CInt
 
 -- | \(\mathcal{O}(n)\) Test whether /all/ code points in 'ShortText' satisfy a predicate.
+--
+-- >>> all (const False) ""
+-- True
+--
+-- >>> all (> 'c') "abcdabcd"
+-- False
+--
+-- >>> all (/= 'c') "abdabd"
+-- True
 --
 -- @since TBD
 all :: (Char -> Bool) -> ShortText -> Bool
@@ -231,6 +279,12 @@ all p st = go 0
 
 -- | \(\mathcal{O}(n)\) Return the left-most codepoint in 'ShortText' that satisfies the given predicate.
 --
+-- >>> find (> 'b') "abcdabcd"
+-- Just 'c'
+--
+-- >>> find (> 'b') "ababab"
+-- Nothing
+--
 -- @since TBD
 find :: (Char -> Bool) -> ShortText -> Maybe Char
 find p st = go 0
@@ -247,6 +301,14 @@ find p st = go 0
 
 -- | \(\mathcal{O}(n)\) Return the index of the left-most codepoint in 'ShortText' that satisfies the given predicate.
 --
+-- >>> findIndex (> 'b') "abcdabcdef"
+-- Just 2
+--
+-- >>> findIndex (> 'b') "ababab"
+-- Nothing
+--
+-- prop> (indexMaybe t =<< findIndex p t) == find p t
+--
 -- @since TBD
 findIndex :: (Char -> Bool) -> ShortText -> Maybe Int
 findIndex p st = go 0 0
@@ -262,6 +324,11 @@ findIndex p st = go 0 0
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into longest prefix satisfying the given predicate and the remaining suffix.
 --
+-- >>> span (< 'c') "abcdabcd"
+-- ("ab","cdabcd")
+--
+-- prop> fst (span p t) <> snd (span p t) == t
+--
 -- @since TBD
 span :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
 span p st = splitAt' (go 0) st
@@ -276,6 +343,9 @@ span p st = splitAt' (go 0) st
     !sz = toCSize st
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into longest suffix satisfying the given predicate and the preceding prefix.
+--
+-- >>> spanEnd (> 'c') "abcdabcd"
+-- ("abcdabc","d")
 --
 -- prop> fst (spanEnd p t) <> snd (spanEnd p t) == t
 --
@@ -309,25 +379,43 @@ toByteArray# (ShortText (BSSI.SBS ba#)) = ba#
 -- | \(\mathcal{O}(0)\) Converts to UTF-8 encoded 'ShortByteString'
 --
 -- This operation has effectively no overhead, as it's currently merely a @newtype@-cast.
+--
+-- @since 0.1
 toShortByteString :: ShortText -> ShortByteString
 toShortByteString (ShortText b) = b
 
 -- | \(\mathcal{O}(n)\) Converts to UTF-8 encoded 'BS.ByteString'
+--
+-- @since 0.1
 toByteString :: ShortText -> BS.ByteString
 toByteString = BSS.fromShort . toShortByteString
 
 -- | Construct a 'BB.Builder' that encodes 'ShortText' as UTF-8.
+--
+-- @since 0.1
 toBuilder :: ShortText -> BB.Builder
 toBuilder = BB.shortByteString . toShortByteString
 
 -- | \(\mathcal{O}(n)\) Convert to 'String'
+--
+-- prop> (fromString . toString) t == t
+--
+-- __Note__: See documentation of 'fromString' for why @('toString' . 'fromString')@ is not an identity function.
+--
+-- @since 0.1
 toString :: ShortText -> String
 toString = decodeStringShort' utf8 . toShortByteString
 
 -- | \(\mathcal{O}(n)\) Convert to 'T.Text'
 --
+-- prop> (fromText . toText) t == t
+--
+-- prop> (toText . fromText) t == t
+--
 -- This is currently not \(\mathcal{O}(1)\) because currently 'T.Text' uses UTF-16 as its internal representation.
 -- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become \(\mathcal{O}(1)\).
+--
+-- @since 0.1
 toText :: ShortText -> T.Text
 toText = T.decodeUtf8 . toByteString
 
@@ -335,7 +423,18 @@ toText = T.decodeUtf8 . toByteString
 
 -- | \(\mathcal{O}(n)\) Construct/pack from 'String'
 --
--- Note: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
+-- >>> fromString []
+-- ""
+--
+-- >>> fromString ['a','b','c']
+-- "abc"
+--
+-- >>> fromString ['\55295','\55296','\57343','\57344'] -- U+D7FF U+D800 U+DFFF U+E000
+-- "\55295\65533\65533\57344"
+--
+-- __Note__: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
+--
+-- @since 0.1
 fromString :: String -> ShortText
 fromString []  = mempty
 fromString [c] = singleton c
@@ -350,6 +449,8 @@ fromString s = ShortText . encodeStringShort utf8 . map r $ s
 --
 -- This is currently not \(\mathcal{O}(1)\) because currently 'T.Text' uses UTF-16 as its internal representation.
 -- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become \(\mathcal{O}(1)\).
+--
+-- @since 0.1
 fromText :: T.Text -> ShortText
 fromText = fromByteStringUnsafe . T.encodeUtf8
 
@@ -359,6 +460,25 @@ fromText = fromByteStringUnsafe . T.encodeUtf8
 -- cannot be \(\mathcal{O}(1)\) because we need to validate the UTF-8 encoding.
 --
 -- Returns 'Nothing' in case of invalid UTF-8 encoding.
+--
+-- >>> fromShortByteString "\x00\x38\xF0\x90\x8C\x9A" -- U+00 U+38 U+1031A
+-- Just "\NUL8\66330"
+--
+-- >>> fromShortByteString "\xC0\x80" -- invalid denormalised U+00
+-- Nothing
+--
+-- >>> fromShortByteString "\xED\xA0\x80" -- U+D800 (non-scalar code-point)
+-- Nothing
+--
+-- >>> fromShortByteString "\xF4\x8f\xbf\xbf" -- U+10FFFF
+-- Just "\1114111"
+--
+-- >>> fromShortByteString "\xF4\x90\x80\x80" -- U+110000 (invalid)
+-- Nothing
+--
+-- prop> fromShortByteString (toShortByteString t) == Just t
+--
+-- @since 0.1
 fromShortByteString :: ShortByteString -> Maybe ShortText
 fromShortByteString sbs
   | isValidUtf8 st  = Just st
@@ -373,12 +493,18 @@ fromShortByteString sbs
 -- __WARNING__: Unlike the safe 'fromShortByteString' conversion, this
 -- conversion is /unsafe/ as it doesn't validate the well-formedness of the
 -- UTF-8 encoding.
+--
+-- @since 0.1.1
 fromShortByteStringUnsafe :: ShortByteString -> ShortText
 fromShortByteStringUnsafe = ShortText
 
 -- | \(\mathcal{O}(n)\) Construct 'ShortText' from UTF-8 encoded 'BS.ByteString'
 --
+-- 'fromByteString' accepts (or rejects) the same input data as 'fromShortByteString'.
+--
 -- Returns 'Nothing' in case of invalid UTF-8 encoding.
+--
+-- @since 0.1
 fromByteString :: BS.ByteString -> Maybe ShortText
 fromByteString = fromShortByteString . BSS.toShort
 
@@ -390,6 +516,8 @@ fromByteString = fromShortByteString . BSS.toShort
 -- __WARNING__: Unlike the safe 'fromByteString' conversion, this
 -- conversion is /unsafe/ as it doesn't validate the well-formedness of the
 -- UTF-8 encoding.
+--
+-- @since 0.1.1
 fromByteStringUnsafe :: BS.ByteString -> ShortText
 fromByteStringUnsafe = ShortText . BSS.toShort
 
@@ -429,9 +557,9 @@ foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteA
 --
 -- prop> indexMaybe (singleton c) 0 == Just c
 --
--- prop> indexMaybe t 0 == fst (uncons t)
+-- prop> indexMaybe t 0 == fmap fst (uncons t)
 --
--- prop> indexMaybe mempty i        == Nothing
+-- prop> indexMaybe mempty i == Nothing
 --
 -- @since TBD
 indexMaybe :: ShortText -> Int -> Maybe Char
@@ -446,11 +574,11 @@ indexMaybe st i
 --
 -- Returns 'Nothing' if out of bounds.
 --
--- prop> indexMaybe (singleton c) 0 == Just c
+-- prop> indexEndMaybe (singleton c) 0 == Just c
 --
--- prop> indexMaybe t 0 == snd (unsnoc t)
+-- prop> indexEndMaybe t 0 == fmap snd (unsnoc t)
 --
--- prop> indexMaybe mempty i        == Nothing
+-- prop> indexEndMaybe mempty i == Nothing
 --
 -- @since TBD
 indexEndMaybe :: ShortText -> Int -> Maybe Char
@@ -470,7 +598,16 @@ foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev 
 --
 -- prop> length (fst (splitAt n t)) == min (length t) (max 0 n)
 --
--- prop> fst (splitAt n t) <> snd (split n t) == t
+-- prop> fst (splitAt n t) <> snd (splitAt n t) == t
+--
+-- >>> splitAt 2 "abcdef"
+-- ("ab","cdef")
+--
+-- >>> splitAt 10 "abcdef"
+-- ("abcdef","")
+--
+-- >>> splitAt (-1) "abcdef"
+-- ("","abcdef")
 --
 -- @since TBD
 splitAt :: Int -> ShortText -> (ShortText,ShortText)
@@ -489,7 +626,16 @@ splitAt i st
 --
 -- prop> fst (splitAtEnd n t) <> snd (splitAtEnd n t) == t
 --
--- prop> splitAtEnd n t = splitAt (length t - n) t
+-- prop> splitAtEnd n t == splitAt (length t - n) t
+--
+-- >>> splitAtEnd 2 "abcdef"
+-- ("abcd","ef")
+--
+-- >>> splitAtEnd 10 "abcdef"
+-- ("","abcdef")
+--
+-- >>> splitAtEnd (-1) "abcdef"
+-- ("abcdef","")
 --
 -- @since TBD
 splitAtEnd :: Int -> ShortText -> (ShortText,ShortText)
@@ -521,6 +667,12 @@ foreign import ccall unsafe "hs_text_short_index_ofs_rev" c_text_short_index_ofs
 --
 -- prop> uncons (cons c t) == Just (c,t)
 --
+-- >>> uncons ""
+-- Nothing
+--
+-- >>> uncons "fmap"
+-- Just ('f',"map")
+--
 -- @since TBD
 uncons :: ShortText -> Maybe (Char,ShortText)
 uncons st
@@ -539,6 +691,12 @@ uncons st
 --
 -- prop> unsnoc (snoc t c) == Just (t,c)
 --
+-- >>> unsnoc ""
+-- Nothing
+--
+-- >>> unsnoc "fmap"
+-- Just ("fma",'p')
+--
 -- @since TBD
 unsnoc :: ShortText -> Maybe (ShortText,Char)
 unsnoc st
@@ -552,6 +710,16 @@ unsnoc st
     len1 = stsz - cpLen cp0
 
 -- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a prefix of the second 'ShortText'
+--
+-- >>> isPrefixOf "ab" "abcdef"
+-- True
+--
+-- >>> isPrefixOf "ac" "abcdef"
+-- False
+--
+-- prop> isPrefixOf "" t == True
+--
+-- prop> isPrefixOf t t == True
 --
 -- @since TBD
 isPrefixOf :: ShortText -> ShortText -> Bool
@@ -569,6 +737,12 @@ isPrefixOf x y
 --
 -- Returns 'Nothing' if first argument is not a prefix of the second argument.
 --
+-- >>> stripPrefix "text-" "text-short"
+-- Just "short"
+--
+-- >>> stripPrefix "test-" "text-short"
+-- Nothing
+--
 -- @since TBD
 stripPrefix :: ShortText -> ShortText -> Maybe ShortText
 stripPrefix pfx t
@@ -576,6 +750,16 @@ stripPrefix pfx t
   | otherwise        = Nothing
 
 -- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a suffix of the second 'ShortText'
+--
+-- >>> isSuffixOf "ef" "abcdef"
+-- True
+--
+-- >>> isPrefixOf "df" "abcdef"
+-- False
+--
+-- prop> isSuffixOf "" t == True
+--
+-- prop> isSuffixOf t t == True
 --
 -- @since TBD
 isSuffixOf :: ShortText -> ShortText -> Bool
@@ -594,6 +778,12 @@ isSuffixOf x y
 --
 -- Returns 'Nothing' if first argument is not a suffix of the second argument.
 --
+-- >>> stripSuffix "-short" "text-short"
+-- Just "text"
+--
+-- >>> stripSuffix "-utf8" "text-short"
+-- Nothing
+--
 -- @since TBD
 stripSuffix :: ShortText -> ShortText -> Maybe ShortText
 stripSuffix sfx t
@@ -605,6 +795,9 @@ stripSuffix sfx t
 ----------------------------------------------------------------------------
 
 -- | \(\mathcal{O}(n)\) Insert character between characters of 'ShortText'.
+--
+-- >>> intersperse '*' "_"
+-- "_"
 --
 -- >>> intersperse '*' "MASH"
 -- "M*A*S*H"
@@ -635,6 +828,12 @@ intersperse c st
       go mba (n-1) (ofs+csz+cp1sz) (ofs2+cp1sz)
 
 -- | \(\mathcal{O}(n)\) Insert 'ShortText' inbetween list of 'ShortText's.
+--
+-- >>> intercalate ", " []
+-- ""
+--
+-- >>> intercalate ", " ["foo"]
+-- "foo"
 --
 -- >>> intercalate ", " ["foo","bar","doo"]
 -- "foo, bar, doo"
@@ -753,7 +952,13 @@ cpLen cp
 
 -- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
 --
--- Note: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
+-- >>> singleton 'A'
+-- "A"
+--
+-- >>> map singleton ['\55295','\55296','\57343','\57344'] -- U+D7FF U+D800 U+DFFF U+E000
+-- ["\55295","\65533","\65533","\57344"]
+--
+-- __Note__: This function is total because it replaces the (invalid) code-points U+D800 through U+DFFF with the replacement character U+FFFD.
 --
 -- @since TBD
 singleton :: Char -> ShortText
@@ -927,3 +1132,10 @@ fromLitMUtf8Addr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
 foreign import ccall unsafe "hs_text_short_mutf8_strlen" c_text_short_mutf8_strlen :: CString -> IO Int
 
 foreign import ccall unsafe "hs_text_short_mutf8_trans" c_text_short_mutf8_trans :: CString -> MutableByteArray# RealWorld -> IO ()
+
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import Text.Show.Functions ()
+-- >>> import qualified Test.QuickCheck.Arbitrary as QC
+-- >>> import Test.QuickCheck.Instances ()
+-- >>> instance QC.Arbitrary ShortText where { arbitrary = fmap fromString QC.arbitrary }
