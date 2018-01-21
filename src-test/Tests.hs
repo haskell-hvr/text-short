@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main(main) where
@@ -50,16 +51,16 @@ qcProps = testGroup "Properties"
   , QC.testProperty "(==)" $ \t1 t2 -> (IUT.fromText t1 == IUT.fromText t2)  == (t1 == t2)
   , QC.testProperty "(!?)" $ \t ->
       let t' = IUT.fromText t
-      in and [ mapMaybe (t' IUT.!?) [0 .. T.length t -1 ] == T.unpack t
-             , mapMaybe (t' IUT.!?) [-5 .. -1] == []
-             , mapMaybe (t' IUT.!?) [T.length t .. T.length t + 5] == []
-             ]
+      in and ([ mapMaybe (t' IUT.!?) ([0 .. T.length t -1 ] :: [Int]) == T.unpack t
+              , mapMaybe (t' IUT.!?) [-5 .. -1] == []
+              , mapMaybe (t' IUT.!?) [T.length t .. T.length t + 5] == []
+              ] :: [Bool])
   , QC.testProperty "indexEndMaybe" $ \t ->
       let t' = IUT.fromText t
-      in and [ mapMaybe (IUT.indexEndMaybe t') [0 .. T.length t -1 ] == T.unpack (T.reverse t)
-             , mapMaybe (IUT.indexEndMaybe t') [-5 .. -1] == []
-             , mapMaybe (IUT.indexEndMaybe t') [T.length t .. T.length t + 5] == []
-             ]
+      in and ([ mapMaybe (IUT.indexEndMaybe t') [0 .. T.length t -1 ] == T.unpack (T.reverse t)
+              , mapMaybe (IUT.indexEndMaybe t') [-5 .. -1] == []
+              , mapMaybe (IUT.indexEndMaybe t') [T.length t .. T.length t + 5] == []
+              ] :: [Bool])
   , QC.testProperty "toText.fromText"   $ \t -> (IUT.toText . IUT.fromText) t == t
   , QC.testProperty "fromByteString"    $ \b -> IUT.fromByteString b == fromByteStringRef b
   , QC.testProperty "fromByteString.toByteString" $ \t -> let ts = IUT.fromText t in (IUT.fromByteString . IUT.toByteString) ts == Just ts
@@ -156,6 +157,11 @@ unitTests = testGroup "Unit-tests"
   , testCase "literal6" $ IUT.unpack testLit6 @?= map toEnum [0]
   , testCase "literal7" $ IUT.unpack testLit7 @?= map toEnum [66328]
   , testCase "literal8" $ IUT.unpack testLit8 @?= map toEnum [127]
+
+    -- list literals
+  , testCase "literal9"  $ [] @?= ("" :: IUT.ShortText)
+  , testCase "literal10" $ ['¤','€','$'] @?= ("¤€$" :: IUT.ShortText)
+  , testCase "literal12" $ IUT.unpack ['\xD800','\xD7FF','\xDFFF','\xE000'] @?= ['\xFFFD','\xD7FF','\xFFFD','\xE000']
  ]
 
 -- isScalar :: Char -> Bool

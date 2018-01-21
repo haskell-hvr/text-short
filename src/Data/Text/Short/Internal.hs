@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MagicHash                  #-}
 {-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UnboxedTuples              #-}
 {-# LANGUAGE UnliftedFFITypes           #-}
 {-# LANGUAGE Unsafe                     #-}
@@ -1205,17 +1206,17 @@ readCodePointRev st (csizeFromB -> ofs)
 foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :: ByteArray# -> CSize -> IO Word32
 
 ----------------------------------------------------------------------------
--- string literals
+-- string & list literals
 
-{- TODO
-
+-- | __Note__: Surrogate pairs (@[U+D800 .. U+DFFF]@) character literals are replaced by U+FFFD.
+--
+-- @since 0.1.2
 instance GHC.Exts.IsList ShortText where
     type (Item ShortText) = Char
     fromList = fromString
-    toList = toString
--}
+    toList   = toString
 
--- | Surrogate pairs (@[U+D800 .. U+DFFF]@) in literals are replaced by U+FFFD.
+-- | __Note__: Surrogate pairs (@[U+D800 .. U+DFFF]@) in string literals are replaced by U+FFFD.
 --
 -- This matches the behaviour of 'IsString' instance for 'T.Text'.
 instance S.IsString ShortText where
