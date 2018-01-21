@@ -823,7 +823,7 @@ intersperse c st
       writeCodePointN cp0sz mba 0 cp0
       go mba (sn - 1) cp0sz cp0sz
   where
-    newsz = ssz + ((B $ sn-1) * csz)
+    newsz = ssz + ((sn-1) `mulB` csz)
     ssz = toB st
     sn  = length st
     csz = cpLen cp
@@ -876,10 +876,19 @@ intercalate sep ts
 --
 -- @since 0.1.2
 replicate :: Int -> ShortText -> ShortText
-replicate n t
-  | n < 1     = mempty
+replicate n0 t
+  | n0 < 1     = mempty
   | null t    = mempty
-  | otherwise = mconcat (List.replicate n t)
+  | otherwise = create (n0 `mulB` sz) (go 0)
+  where
+    go :: Int -> MBA s -> ST s ()
+    go j mba
+      | j == n0    = return ()
+      | otherwise  = do
+          copyByteArray t 0 mba (j `mulB` sz) sz
+          go (j+1) mba
+
+    sz = toB t
 
 -- | \(\mathcal{O}(n)\) Reverse characters in 'ShortText'.
 --
@@ -980,6 +989,9 @@ newtype B = B { unB :: Int }
           deriving (Ord,Eq,Num)
 
 {- TODO: introduce operators for 'B' to avoid 'Num' -}
+
+mulB :: Int -> B -> B
+mulB n (B b) = B (n*b)
 
 csizeFromB :: B -> CSize
 csizeFromB = fromIntegral . unB
