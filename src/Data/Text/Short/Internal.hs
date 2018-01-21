@@ -107,12 +107,8 @@ import           Foreign.C
 import qualified GHC.CString                    as GHC
 import           GHC.Exts                       (Addr#, ByteArray#, Int (I#),
                                                  Int#, MutableByteArray#,
-                                                 Ptr (..), RealWorld, Word (W#),
-                                                 copyAddrToByteArray#,
-                                                 copyByteArray#, newByteArray#,
-                                                 sizeofByteArray#,
-                                                 unsafeFreezeByteArray#,
-                                                 writeWord8Array#)
+                                                 Ptr (..), RealWorld, Word (W#))
+import qualified GHC.Exts
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
@@ -268,17 +264,17 @@ foreign import ccall unsafe "hs_text_short_is_ascii" c_text_short_is_ascii :: By
 --
 -- @since 0.1.2
 all :: (Char -> Bool) -> ShortText -> Bool
-all p st = go 0
+all p st = go (B 0)
   where
     go ofs
       | ofs >= sz  = True
       | otherwise  = let !cp = readCodePoint st ofs
-                         c = chr (fromIntegral cp)
+                         c = cp2ch cp
                      in if p c
-                        then go (ofs+cpLen (fromIntegral cp))
+                        then go (ofs+cpLen cp)
                         else False
 
-    !sz = toCSize st
+    !sz = toB st
 
 -- | \(\mathcal{O}(n)\) Return the left-most codepoint in 'ShortText' that satisfies the given predicate.
 --
@@ -295,12 +291,12 @@ find p st = go 0
     go ofs
       | ofs >= sz  = Nothing
       | otherwise  = let !cp = readCodePoint st ofs
-                         c = chr (fromIntegral cp)
+                         c = cp2ch cp
                      in if p c
                         then Just c
-                        else go (ofs+cpLen (fromIntegral cp))
+                        else go (ofs + cpLen cp)
 
-    !sz = toCSize st
+    !sz = toB st
 
 -- | \(\mathcal{O}(n)\) Return the index of the left-most codepoint in 'ShortText' that satisfies the given predicate.
 --
@@ -319,11 +315,26 @@ findIndex p st = go 0 0
     go ofs i
       | ofs >= sz  = Nothing
       | otherwise  = let !cp = readCodePoint st ofs
-                     in if p (chr (fromIntegral cp))
+                     in if p (cp2ch cp)
                         then Just i
-                        else go (ofs+cpLen (fromIntegral cp)) (i+1)
+                        else go (ofs+cpLen cp) (i+1)
 
-    !sz = toCSize st
+    !sz = toB st
+
+-- internal helper
+{-# INLINE findOfs #-}
+findOfs :: (Char -> Bool) -> ShortText -> B -> Maybe B
+findOfs p st = go
+  where
+    go :: B -> Maybe B
+    go ofs
+      | ofs >= sz  = Nothing
+      | otherwise  = let !cp = readCodePoint st ofs
+                     in if p (cp2ch cp)
+                        then Just ofs
+                        else go (ofs+cpLen cp)
+
+    !sz = toB st
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into longest prefix satisfying the given predicate and the remaining suffix.
 --
@@ -334,16 +345,16 @@ findIndex p st = go 0 0
 --
 -- @since 0.1.2
 span :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
-span p st = splitAt' (go 0) st
+span p st = splitAtOfs (go 0) st
   where
     go ofs | ofs >= sz  = ofs
     go ofs
-      | p (chr (fromIntegral cp)) = go (ofs+cpLen (fromIntegral cp))
-      | otherwise                 = ofs
+      | p (cp2ch cp) = go (ofs+cpLen cp)
+      | otherwise    = ofs
       where
         !cp = readCodePoint st ofs
 
-    !sz = toCSize st
+    !sz = toB st
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into longest suffix satisfying the given predicate and the preceding prefix.
 --
@@ -354,27 +365,30 @@ span p st = splitAt' (go 0) st
 --
 -- @since 0.1.2
 spanEnd :: (Char -> Bool) -> ShortText -> (ShortText,ShortText)
-spanEnd p st = splitAt' (go sz) st
+spanEnd p st = splitAtOfs (go sz) st
   where
     go 0 = 0
     go ofs
-      | p (chr (fromIntegral cp)) = go (ofs-cpLen (fromIntegral cp))
+      | p (cp2ch cp) = go (ofs-cpLen cp)
       | otherwise                 = ofs
       where
         !cp = readCodePointRev st ofs
 
-    !sz = toCSize st
+    !sz = toB st
 
 ----------------------------------------------------------------------------
 
 toCSize :: ShortText -> CSize
 toCSize = fromIntegral . BSS.length . toShortByteString
 
+toB :: ShortText -> B
+toB = fromIntegral . BSS.length . toShortByteString
+
 toLength :: ShortText -> Int
 toLength st = I# (toLength# st)
 
 toLength# :: ShortText -> Int#
-toLength# st = sizeofByteArray# (toByteArray# st)
+toLength# st = GHC.Exts.sizeofByteArray# (toByteArray# st)
 
 toByteArray# :: ShortText -> ByteArray#
 toByteArray# (ShortText (BSSI.SBS ba#)) = ba#
@@ -568,10 +582,11 @@ foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteA
 indexMaybe :: ShortText -> Int -> Maybe Char
 indexMaybe st i
   | i < 0         = Nothing
-  | cp < 0x110000 = Just (chr (fromIntegral cp))
+  | cp < 0x110000 = Just (cp2ch cp)
   | otherwise     = Nothing
   where
-    cp = unsafeDupablePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
+    cp = fromIntegral $
+         unsafeDupablePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
 
 -- | \(\mathcal{O}(n)\) Lookup /i/-th code-point from the end of 'ShortText'.
 --
@@ -587,17 +602,18 @@ indexMaybe st i
 indexEndMaybe :: ShortText -> Int -> Maybe Char
 indexEndMaybe st i
   | i < 0         = Nothing
-  | cp < 0x110000 = Just (chr (fromIntegral cp))
+  | cp < 0x110000 = Just (cp2ch cp)
   | otherwise     = Nothing
   where
-    cp = unsafeDupablePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
+    cp = fromIntegral $
+         unsafeDupablePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
 
 foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev :: ByteArray# -> CSize -> CSize -> IO Word32
 
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
 --
--- @'splitAt' n t@ returns a pair of 'ShortText' with the following properties:
+-- @'splitAtOfs n t@ returns a pair of 'ShortText' with the following properties:
 --
 -- prop> length (fst (splitAt n t)) == min (length t) (max 0 n)
 --
@@ -616,9 +632,10 @@ foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev 
 splitAt :: Int -> ShortText -> (ShortText,ShortText)
 splitAt i st
   | i <= 0    = (mempty,st)
-  | otherwise = splitAt' ofs st
+  | otherwise = splitAtOfs ofs st
   where
-    ofs   = unsafeDupablePerformIO (c_text_short_index_ofs (toByteArray# st) stsz (fromIntegral i))
+    ofs   = csizeToB $
+            unsafeDupablePerformIO (c_text_short_index_ofs (toByteArray# st) stsz (fromIntegral i))
     stsz  = toCSize st
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
@@ -645,19 +662,20 @@ splitAtEnd :: Int -> ShortText -> (ShortText,ShortText)
 splitAtEnd i st
   | i <= 0      = (st,mempty)
   | ofs >= stsz = (mempty,st)
-  | otherwise   = splitAt' ofs st
+  | otherwise   = splitAtOfs ofs st
   where
-    ofs   = unsafeDupablePerformIO (c_text_short_index_ofs_rev (toByteArray# st) stsz (fromIntegral (i-1)))
-    stsz  = toCSize st
+    ofs   = csizeToB $
+            unsafeDupablePerformIO (c_text_short_index_ofs_rev (toByteArray# st) (toCSize st) (fromIntegral (i-1)))
+    stsz  = toB st
 
-{-# INLINE splitAt' #-}
-splitAt' :: CSize -> ShortText -> (ShortText,ShortText)
-splitAt' ofs st
+{-# INLINE splitAtOfs #-}
+splitAtOfs :: B -> ShortText -> (ShortText,ShortText)
+splitAtOfs ofs st
   | ofs  == 0    = (mempty,st)
   | ofs  >  stsz = (st,mempty)
   | otherwise    = (slice st 0 ofs, slice st ofs (stsz-ofs))
   where
-    !stsz  = toCSize st
+    !stsz  = toB st
 
 foreign import ccall unsafe "hs_text_short_index_ofs" c_text_short_index_ofs :: ByteArray# -> CSize -> CSize -> IO CSize
 
@@ -683,10 +701,10 @@ uncons st
   | len2 == 0  = Just (c0, mempty)
   | otherwise  = Just (c0, slice st ofs len2)
   where
-    c0  = chr (fromIntegral cp0)
+    c0  = cp2ch cp0
     cp0 = fromIntegral (readCodePoint st 0)
     ofs = cpLen cp0
-    len2 = toCSize st - ofs
+    len2 = toB st - ofs
 
 -- | \(\mathcal{O}(n)\) Inverse operation to 'snoc'
 --
@@ -707,9 +725,9 @@ unsnoc st
   | len1 == 0  = Just (mempty, c0)
   | otherwise  = Just (slice st 0 len1, c0)
   where
-    c0  = chr (fromIntegral cp0)
-    cp0 = fromIntegral (readCodePointRev st stsz)
-    stsz = toCSize st
+    c0  = cp2ch cp0
+    cp0 = readCodePointRev st stsz
+    stsz = toB st
     len1 = stsz - cpLen cp0
 
 -- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a prefix of the second 'ShortText'
@@ -749,7 +767,7 @@ isPrefixOf x y
 -- @since 0.1.2
 stripPrefix :: ShortText -> ShortText -> Maybe ShortText
 stripPrefix pfx t
-  | isPrefixOf pfx t = Just $! snd (splitAt' (toCSize pfx) t)
+  | isPrefixOf pfx t = Just $! snd (splitAtOfs (toB pfx) t)
   | otherwise        = Nothing
 
 -- | \(\mathcal{O}(n)\) Tests whether the first 'ShortText' is a suffix of the second 'ShortText'
@@ -790,10 +808,10 @@ isSuffixOf x y
 -- @since 0.1.2
 stripSuffix :: ShortText -> ShortText -> Maybe ShortText
 stripSuffix sfx t
-  | isSuffixOf sfx t = Just $! fst (splitAt' pfxLen t)
+  | isSuffixOf sfx t = Just $! fst (splitAtOfs pfxLen t)
   | otherwise        = Nothing
   where
-    pfxLen = toCSize t - toCSize sfx
+    pfxLen = toB t - toB sfx
 
 ----------------------------------------------------------------------------
 
@@ -816,8 +834,8 @@ intersperse c st
       writeCodePointN cp0sz mba 0 cp0
       go mba (sn - 1) cp0sz cp0sz
   where
-    newsz = fromIntegral (ssz + (fromIntegral (sn-1) * csz))
-    ssz = toCSize st
+    newsz = ssz + ((B $ sn-1) * csz)
+    ssz = toB st
     sn  = length st
     csz = cpLen cp
     cp  = ch2cp c
@@ -826,8 +844,8 @@ intersperse c st
     go mba n ofs ofs2 = do
       let cp1 = readCodePoint st ofs2
           cp1sz = cpLen cp1
-      writeCodePointN csz   mba (fromIntegral ofs) cp
-      writeCodePointN cp1sz mba (fromIntegral (ofs+csz)) cp1
+      writeCodePointN csz   mba ofs cp
+      writeCodePointN cp1sz mba (ofs+csz) cp1
       go mba (n-1) (ofs+csz+cp1sz) (ofs2+cp1sz)
 
 -- | \(\mathcal{O}(n)\) Insert 'ShortText' inbetween list of 'ShortText's.
@@ -861,7 +879,7 @@ reverse st
   | sn == 1   = st
   | otherwise = create sz $ go sn 0
   where
-    sz = fromIntegral (toCSize st)
+    sz = toB st
     sn = length st
 
     go 0 !_  _   = return ()
@@ -869,7 +887,7 @@ reverse st
       let cp   = readCodePoint st ofs
           cpsz = cpLen cp
           ofs' = ofs+cpsz
-      writeCodePointN cpsz mba (sz - fromIntegral ofs') cp
+      writeCodePointN cpsz mba (sz - ofs') cp
       go (i-1) ofs' mba
 
 
@@ -895,28 +913,39 @@ filter p t = fromString [ c | c <- toString t, p c ]
 -- | Construct a new 'ShortText' from an existing one by slicing
 --
 -- NB: The 'CSize' arguments refer to byte-offsets
-slice :: ShortText -> CSize -> CSize -> ShortText
-slice (ShortText (BSSI.SBS ba#)) (fromIntegral -> ofs) (fromIntegral -> len)
+slice :: ShortText -> B -> B -> ShortText
+slice st ofs len
   | ofs < 0    = error "invalid offset"
   | len < 0    = error "invalid length"
   | len' == 0  = mempty
-  | otherwise  = create len' go
+  | otherwise  = create len' $ \mba -> copyByteArray st ofs' mba 0 len'
   where
-    len0 = I# (sizeofByteArray# ba#)
-    !len'@(I# len'#) = max 0 (min len (len0-ofs))
-    !(I# ofs'#) = max 0 ofs
-
-    go :: MBA s -> ST s ()
-    go (MBA# mba#) = ST $ \s -> case copyByteArray# ba# ofs'# mba# 0# len'# s of
-                                  s' -> (# s', () #)
+    len0 = toB st
+    len' = max 0 (min len (len0-ofs))
+    ofs' = max 0 ofs
 
 ----------------------------------------------------------------------------
 -- low-level MutableByteArray# helpers
 
+-- | Byte offset (or size) in bytes
+--
+-- This currently wraps an 'Int' because this is what GHC's primops
+-- currently use for byte offsets/sizes.
+newtype B = B { unB :: Int }
+          deriving (Ord,Eq,Num)
+
+{- TODO: introduce operators for 'B' to avoid 'Num' -}
+
+csizeFromB :: B -> CSize
+csizeFromB = fromIntegral . unB
+
+csizeToB :: CSize -> B
+csizeToB = B . fromIntegral
+
 data MBA s = MBA# { unMBA# :: MutableByteArray# s }
 
 {-# INLINE create #-}
-create :: Int -> (forall s. MBA s -> ST s ()) -> ShortText
+create :: B -> (forall s. MBA s -> ST s ()) -> ShortText
 create n go = runST $ do
   mba <- newByteArray n
   go mba
@@ -925,31 +954,31 @@ create n go = runST $ do
 {-# INLINE unsafeFreeze #-}
 unsafeFreeze :: MBA s -> ST s ShortText
 unsafeFreeze (MBA# mba#)
-  = ST $ \s -> case unsafeFreezeByteArray# mba# s of
+  = ST $ \s -> case GHC.Exts.unsafeFreezeByteArray# mba# s of
                  (# s', ba# #) -> (# s', ShortText (BSSI.SBS ba#) #)
 
 {-# INLINE copyByteArray #-}
-copyByteArray :: ShortText -> Int -> MBA s -> Int -> Int -> ST s ()
-copyByteArray (ShortText (BSSI.SBS src#)) (I# src_off#) (MBA# dst#) (I# dst_off#) (I# len#)
-  = ST $ \s -> case copyByteArray# src# src_off# dst# dst_off# len# s of
+copyByteArray :: ShortText -> B -> MBA s -> B -> B -> ST s ()
+copyByteArray (ShortText (BSSI.SBS src#)) (B (I# src_off#)) (MBA# dst#) (B (I# dst_off#)) (B (I# len#))
+  = ST $ \s -> case GHC.Exts.copyByteArray# src# src_off# dst# dst_off# len# s of
                  s' -> (# s', () #)
 
 {-# INLINE newByteArray #-}
-newByteArray :: Int -> ST s (MBA s)
-newByteArray (I# n#)
-  = ST $ \s -> case newByteArray# n# s of
+newByteArray :: B -> ST s (MBA s)
+newByteArray (B (I# n#))
+  = ST $ \s -> case GHC.Exts.newByteArray# n# s of
                  (# s', mba# #) -> (# s', MBA# mba# #)
 
 {-# INLINE writeWord8Array #-}
-writeWord8Array :: MBA s -> Int -> Word -> ST s ()
-writeWord8Array (MBA# mba#) (I# i#) (W# w#)
-  = ST $ \s -> case writeWord8Array# mba# i# w# s of
+writeWord8Array :: MBA s -> B -> Word -> ST s ()
+writeWord8Array (MBA# mba#) (B (I# i#)) (W# w#)
+  = ST $ \s -> case GHC.Exts.writeWord8Array# mba# i# w# s of
                  s' -> (# s', () #)
 
 {-# INLINE copyAddrToByteArray #-}
-copyAddrToByteArray :: Ptr a -> MBA RealWorld -> Int -> Int -> ST RealWorld ()
-copyAddrToByteArray (Ptr src#) (MBA# dst#) (I# dst_off#) (I# len#)
-  = ST $ \s -> case copyAddrToByteArray# src# dst# dst_off# len# s of
+copyAddrToByteArray :: Ptr a -> MBA RealWorld -> B -> B -> ST RealWorld ()
+copyAddrToByteArray (Ptr src#) (MBA# dst#) (B (I# dst_off#)) (B (I# len#))
+  = ST $ \s -> case GHC.Exts.copyAddrToByteArray# src# dst# dst_off# len# s of
                  s' -> (# s', () #)
 
 ----------------------------------------------------------------------------
@@ -963,13 +992,16 @@ copyAddrToByteArray (Ptr src#) (MBA# dst#) (I# dst_off#) (I# len#)
 ch2cp :: Char -> Word
 ch2cp = fromIntegral . ord
 
+cp2ch :: Word -> Char
+cp2ch = chr . fromIntegral
+
 {-# INLINE cpLen #-}
-cpLen :: Word -> CSize
+cpLen :: Word -> B
 cpLen cp
-  | cp <    0x80  = 1
-  | cp <   0x800  = 2
-  | cp < 0x10000  = 3
-  | otherwise     = 4
+  | cp <    0x80  = B 1
+  | cp <   0x800  = B 2
+  | cp < 0x10000  = B 3
+  | otherwise     = B 4
 
 -- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
 --
@@ -1013,7 +1045,7 @@ cons (ch2cp -> cp) sfx
   | cp < 0x10000  = create (n+3) $ \mba -> writeCodePoint3 mba 0 cp >> copySfx 3 mba
   | otherwise     = create (n+4) $ \mba -> writeCodePoint4 mba 0 cp >> copySfx 4 mba
   where
-    !n = toLength sfx
+    !n = toB sfx
     copySfx ofs mba = copyByteArray sfx 0 mba ofs n
 
 -- | \(\mathcal{O}(n)\) Append a character to the ond of a 'ShortText'.
@@ -1031,7 +1063,7 @@ snoc pfx (ch2cp -> cp)
   | cp < 0x10000  = create (n+3) $ \mba -> copyPfx mba >> writeCodePoint3 mba n cp
   | otherwise     = create (n+4) $ \mba -> copyPfx mba >> writeCodePoint4 mba n cp
   where
-    !n = toLength pfx
+    !n = toB pfx
     copyPfx mba = copyByteArray pfx 0 mba 0 n
 
 {-
@@ -1045,49 +1077,51 @@ writeCodePoint mba ofs cp
   | otherwise     = writeCodePoint4 mba ofs cp
 -}
 
-writeCodePointN :: CSize -> MBA s -> Int -> Word -> ST s ()
+writeCodePointN :: B -> MBA s -> B -> Word -> ST s ()
 writeCodePointN 1 = writeCodePoint1
 writeCodePointN 2 = writeCodePoint2
 writeCodePointN 3 = writeCodePoint3
 writeCodePointN 4 = writeCodePoint4
 writeCodePointN _ = undefined
 
-writeCodePoint1 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint1 :: MBA s -> B -> Word -> ST s ()
 writeCodePoint1 mba ofs cp =
   writeWord8Array mba ofs cp
 
-writeCodePoint2 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint2 :: MBA s -> B -> Word -> ST s ()
 writeCodePoint2 mba ofs cp = do
   writeWord8Array mba  ofs    (0xc0 .|. (cp `shiftR` 6))
   writeWord8Array mba (ofs+1) (0x80 .|. (cp               .&. 0x3f))
 
-writeCodePoint3 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint3 :: MBA s -> B -> Word -> ST s ()
 writeCodePoint3 mba ofs cp = do
   writeWord8Array mba  ofs    (0xe0 .|.  (cp `shiftR` 12))
   writeWord8Array mba (ofs+1) (0x80 .|. ((cp `shiftR` 6)  .&. 0x3f))
   writeWord8Array mba (ofs+2) (0x80 .|. (cp               .&. 0x3f))
 
-writeCodePoint4 :: MBA s -> Int -> Word -> ST s ()
+writeCodePoint4 :: MBA s -> B -> Word -> ST s ()
 writeCodePoint4 mba ofs cp = do
   writeWord8Array mba  ofs    (0xf0 .|.  (cp `shiftR` 18))
   writeWord8Array mba (ofs+1) (0x80 .|. ((cp `shiftR` 12) .&. 0x3f))
   writeWord8Array mba (ofs+2) (0x80 .|. ((cp `shiftR` 6)  .&. 0x3f))
   writeWord8Array mba (ofs+3) (0x80 .|. (cp               .&. 0x3f))
 
-writeRepChar :: MBA s -> Int -> ST s ()
+writeRepChar :: MBA s -> B -> ST s ()
 writeRepChar mba ofs = do
   writeWord8Array mba ofs     0xef
   writeWord8Array mba (ofs+1) 0xbf
   writeWord8Array mba (ofs+2) 0xbd
 
 -- beware: UNSAFE!
-readCodePoint :: ShortText -> CSize -> Word
-readCodePoint st ofs = fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp (toByteArray# st) ofs)
+readCodePoint :: ShortText -> B -> Word
+readCodePoint st (csizeFromB -> ofs)
+  = fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp (toByteArray# st) ofs)
 
 foreign import ccall unsafe "hs_text_short_ofs_cp" c_text_short_ofs_cp :: ByteArray# -> CSize -> IO Word32
 
-readCodePointRev :: ShortText -> CSize -> Word
-readCodePointRev st ofs = fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByteArray# st) ofs)
+readCodePointRev :: ShortText -> B -> Word
+readCodePointRev st (csizeFromB -> ofs)
+  = fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByteArray# st) ofs)
 
 foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :: ByteArray# -> CSize -> IO Word32
 
@@ -1125,7 +1159,7 @@ fromStringLit = fromString
 {-# NOINLINE fromLitAsciiAddr# #-}
 fromLitAsciiAddr# :: Addr# -> ShortText
 fromLitAsciiAddr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
-  sz <- fromIntegral `fmap` c_strlen ptr
+  sz <- csizeToB `fmap` c_strlen ptr
 
   case sz `compare` 0 of
     EQ -> return mempty -- should not happen if rules fire correctly
@@ -1133,7 +1167,10 @@ fromLitAsciiAddr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
       mba <- newByteArray sz
       copyAddrToByteArray ptr mba 0 sz
       unsafeFreeze mba
-    LT -> return (error "fromLitAsciiAddr#") -- should never happen unless strlen(3) overflows
+    LT -> return (error "fromLitAsciiAddr#")
+          -- NOTE: should never happen unless strlen(3) overflows (NB: CSize
+          -- is unsigned; the overflow would occur when converting to
+          -- 'B')
 
 foreign import ccall unsafe "strlen" c_strlen :: CString -> IO CSize
 
@@ -1141,7 +1178,7 @@ foreign import ccall unsafe "strlen" c_strlen :: CString -> IO CSize
 {-# NOINLINE fromLitMUtf8Addr# #-}
 fromLitMUtf8Addr# :: Addr# -> ShortText
 fromLitMUtf8Addr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
-  sz <- c_text_short_mutf8_strlen ptr
+  sz <- B `fmap` c_text_short_mutf8_strlen ptr
 
   case sz `compare` 0 of
     EQ -> return mempty -- should not happen if rules fire correctly
