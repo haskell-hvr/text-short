@@ -53,6 +53,7 @@ module Data.Text.Short.Internal
     , intercalate
     , reverse
     , filter
+    , replicate
 
       -- * Conversions
       -- ** 'Char'
@@ -117,8 +118,8 @@ import           GHC.ST
 import           Prelude                        hiding (all, any, break, concat,
                                                  drop, dropWhile, filter, head,
                                                  init, last, length, null,
-                                                 reverse, span, splitAt, tail,
-                                                 take, takeWhile)
+                                                 replicate, reverse, span,
+                                                 splitAt, tail, take, takeWhile)
 import           System.IO.Unsafe
 import           Text.Printf                    (PrintfArg, formatArg,
                                                  formatString)
@@ -848,9 +849,37 @@ intersperse c st
 -- >>> intercalate ", " ["foo","bar","doo"]
 -- "foo, bar, doo"
 --
+-- prop> intercalate "" ts == concat ts
+--
 -- @since 0.1.2
 intercalate :: ShortText -> [ShortText] -> ShortText
-intercalate sep ts = mconcat (List.intersperse sep ts)
+intercalate _ []  = mempty
+intercalate _ [t] = t
+intercalate sep ts
+  | null sep   = mconcat ts
+  | otherwise  = mconcat (List.intersperse sep ts)
+
+-- | \(\mathcal{O}(n*m)\) Replicate a 'ShortText'.
+--
+-- A repetition count smaller than 1 results in an empty string result.
+--
+-- >>> replicate 3 "jobs!"
+-- "jobs!jobs!jobs!"
+--
+-- >>> replicate 10000 ""
+-- ""
+--
+-- >>> replicate 0 "nothing"
+-- ""
+--
+-- prop> length (replicate n t) == max 0 n * length t
+--
+-- @since 0.1.2
+replicate :: Int -> ShortText -> ShortText
+replicate n t
+  | n < 1     = mempty
+  | null t    = mempty
+  | otherwise = mconcat (List.replicate n t)
 
 -- | \(\mathcal{O}(n)\) Reverse characters in 'ShortText'.
 --
@@ -1263,7 +1292,7 @@ foreign import ccall unsafe "hs_text_short_mutf8_trans" c_text_short_mutf8_trans
 
 -- $setup
 -- >>> :set -XOverloadedStrings
--- >>> import Data.Text.Short (pack, unpack)
+-- >>> import Data.Text.Short (pack, unpack, concat)
 -- >>> import Text.Show.Functions ()
 -- >>> import qualified Test.QuickCheck.Arbitrary as QC
 -- >>> import Test.QuickCheck.Instances ()

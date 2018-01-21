@@ -32,6 +32,7 @@ module Data.Text.Short
     , concat
     , cons
     , snoc
+    , replicate
 
       -- ** Deconstruction
     , unpack
@@ -53,7 +54,6 @@ module Data.Text.Short
     , indexMaybe
     , indexEndMaybe
     , findIndex
-
 
       -- * Splitting 'ShortText's
       -- ** Basic functions
