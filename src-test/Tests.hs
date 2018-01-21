@@ -27,16 +27,24 @@ tests = testGroup "Tests" [unitTests,qcProps]
 data STI = STI IUT.ShortText Int
          deriving (Eq,Show)
 
+newtype ST = ST IUT.ShortText
+         deriving (Eq,Show)
+
 instance Arbitrary STI where
   arbitrary = do
     t <- arbitrary
     i <- choose (0, T.length t - 1)
     return $! STI (IUT.fromText t) i
 
+instance Arbitrary ST where
+  arbitrary = fmap (ST . IUT.fromText) arbitrary
+  shrink (ST st) = map (ST . IUT.fromText) (shrink (IUT.toText st))
+
 qcProps :: TestTree
 qcProps = testGroup "Properties"
   [ QC.testProperty "length/fromText"   $ \t -> IUT.length (IUT.fromText t) == T.length t
   , QC.testProperty "length/fromString" $ \s -> IUT.length (IUT.fromString s) == length s
+  , QC.testProperty "length/append"     $ \(ST t1) (ST t2) -> IUT.length t1 + IUT.length t2 == IUT.length (IUT.append t1 t2)
   , QC.testProperty "compare" $ \t1 t2 -> IUT.fromText t1 `compare` IUT.fromText t2  == t1 `compare` t2
   , QC.testProperty "(==)" $ \t1 t2 -> (IUT.fromText t1 == IUT.fromText t2)  == (t1 == t2)
   , QC.testProperty "(!?)" $ \t ->
