@@ -78,6 +78,7 @@ module Data.Text.Short.Internal
 
     , BS.ByteString
     , T.Text
+    , Char
 
       -- ** Internals
     , isValidUtf8
@@ -863,17 +864,33 @@ foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :
 ----------------------------------------------------------------------------
 -- string literals
 
+{- TODO
+
+instance GHC.Exts.IsList ShortText where
+    type (Item ShortText) = Char
+    fromList = fromString
+    toList = toString
+-}
+
 -- | Surrogate pairs (@[U+D800 .. U+DFFF]@) in literals are replaced by U+FFFD.
 --
 -- This matches the behaviour of 'IsString' instance for 'T.Text'.
 instance S.IsString ShortText where
-    fromString = fromString
+    fromString = fromStringLit
 
-{-# INLINE [0] fromString #-}
+-- i.e., don't inline before Phase 0
+{-# INLINE [0] fromStringLit #-}
+fromStringLit :: String -> ShortText
+fromStringLit = fromString
 
-{-# RULES "ShortText literal" forall s . fromString (GHC.unpackCString# s) = fromLitAsciiAddr# s #-}
+{-# RULES "ShortText empty literal" fromStringLit "" = mempty #-}
 
-{-# RULES "ShortText literal UTF-8" forall s . fromString (GHC.unpackCStringUtf8# s) = fromLitMUtf8Addr# s #-}
+-- TODO: this doesn't seem to fire
+{-# RULES "ShortText singleton literal" forall c . fromStringLit [c] = singleton c #-}
+
+{-# RULES "ShortText literal ASCII" forall s . fromStringLit (GHC.unpackCString# s) = fromLitAsciiAddr# s #-}
+
+{-# RULES "ShortText literal UTF-8" forall s . fromStringLit (GHC.unpackCStringUtf8# s) = fromLitMUtf8Addr# s #-}
 
 {-# NOINLINE fromLitAsciiAddr# #-}
 fromLitAsciiAddr# :: Addr# -> ShortText
@@ -881,12 +898,12 @@ fromLitAsciiAddr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
   sz <- fromIntegral `fmap` c_strlen ptr
 
   case sz `compare` 0 of
-    EQ -> return mempty
+    EQ -> return mempty -- should not happen if rules fire correctly
     GT -> stToIO $ do
       mba <- newByteArray sz
       copyAddrToByteArray ptr mba 0 sz
       unsafeFreeze mba
-    LT -> error "fromLitAsciiAddr#"
+    LT -> return (error "fromLitAsciiAddr#") -- should never happen unless strlen(3) overflows
 
 foreign import ccall unsafe "strlen" c_strlen :: CString -> IO CSize
 
@@ -897,7 +914,7 @@ fromLitMUtf8Addr# (Ptr -> ptr) = unsafeDupablePerformIO $ do
   sz <- c_text_short_mutf8_strlen ptr
 
   case sz `compare` 0 of
-    EQ -> return mempty -- should not happen
+    EQ -> return mempty -- should not happen if rules fire correctly
     GT -> stToIO $ do
       mba <- newByteArray sz
       copyAddrToByteArray ptr mba 0 sz
