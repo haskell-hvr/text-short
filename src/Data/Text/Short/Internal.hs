@@ -841,6 +841,7 @@ intersperse c st
     csz = cpLen cp
     cp  = ch2cp c
 
+    go :: MBA s -> Int -> B -> B -> ST s ()
     go _   0 !_  !_   = return ()
     go mba n ofs ofs2 = do
       let cp1 = readCodePoint st ofs2
@@ -883,6 +884,7 @@ reverse st
     sz = toB st
     sn = length st
 
+    go :: Int -> B -> MBA s -> ST s ()
     go 0 !_  _   = return ()
     go i ofs mba = do
       let cp   = readCodePoint st ofs
@@ -925,6 +927,7 @@ filter p t
 
     t0sz = toB t
 
+    go :: MBA s -> B -> B -> ST s B
     go mba !t0ofs !t1ofs
       | t0ofs >= t0sz = return t1ofs
       | otherwise = let !cp = readCodePoint t t0ofs
@@ -1118,6 +1121,8 @@ cons (ch2cp -> cp@(CP cpw)) sfx
   | otherwise      = create (n+4) $ \mba -> writeCodePoint4 mba 0 cp >> copySfx 4 mba
   where
     !n = toB sfx
+
+    copySfx :: B -> MBA s -> ST s ()
     copySfx ofs mba = copyByteArray sfx 0 mba ofs n
 
 -- | \(\mathcal{O}(n)\) Append a character to the ond of a 'ShortText'.
@@ -1136,6 +1141,8 @@ snoc pfx (ch2cp -> cp@(CP cpw))
   | otherwise      = create (n+4) $ \mba -> copyPfx mba >> writeCodePoint4 mba n cp
   where
     !n = toB pfx
+
+    copyPfx :: MBA s -> ST s ()
     copyPfx mba = copyByteArray pfx 0 mba 0 n
 
 {-
