@@ -66,6 +66,8 @@ module Data.Text.Short
     , dropWhile
     , dropWhileEnd
 
+    , dropAround
+
       -- ** Pair-valued functions
     , splitAt
     , splitAtEnd

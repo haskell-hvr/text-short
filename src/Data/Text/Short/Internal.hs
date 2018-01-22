@@ -52,8 +52,10 @@ module Data.Text.Short.Internal
     , intersperse
     , intercalate
     , reverse
-    , filter
     , replicate
+
+    , filter
+    , dropAround
 
       -- * Conversions
       -- ** 'Char'
@@ -947,8 +949,8 @@ filter p t
         t1sz <- go mba ofs2 ofs1
         return t1sz
   where
-    mofs1 = findOfs (not . p) t 0 -- first non-accepted Char
-    mofs2 = findOfs p t (fromMaybe 0 mofs1) -- first accepted Char
+    mofs1 = findOfs (not . p) t (B 0) -- first non-accepted Char
+    mofs2 = findOfs p t (fromMaybe (B 0) mofs1) -- first accepted Char
 
     t0sz = toB t
 
@@ -961,6 +963,28 @@ filter p t
                        then writeCodePointN cpsz mba t1ofs cp >>
                             go mba (t0ofs+cpsz) (t1ofs+cpsz)
                        else go mba (t0ofs+cpsz) t1ofs -- skip code-point
+
+-- | \(\mathcal{O}(n)\) Strip characters from the beginning end and of 'ShortText' which satisfy given predicate.
+--
+-- >>> dropAround (== ' ') "   white   space   "
+-- "white   space"
+--
+-- >>> dropAround (> 'a') "bcdefghi"
+-- ""
+--
+-- @since 0.1.2
+dropAround :: (Char -> Bool) -> ShortText -> ShortText
+dropAround p t0 = case (mofs1,mofs2) of
+                    (Nothing,_) -> mempty
+                    (Just ofs1,Just ofs2)
+                      | ofs1 == 0, ofs2 == t0sz  -> t0
+                      | ofs1 < ofs2  -> create (ofs2-ofs1) $ \mba -> do
+                          copyByteArray t0 ofs1 mba (B 0) (ofs2-ofs1)
+                    (_,_) -> error "dropAround: the impossible happened"
+  where
+    mofs1 = findOfs    (not . p) t0 (B 0)
+    mofs2 = findOfsRev (not . p) t0 t0sz
+    t0sz = toB t0
 
 ----------------------------------------------------------------------------
 

@@ -78,6 +78,7 @@ qcProps = testGroup "Properties"
   , QC.testProperty "reverse"     $ \t -> IUT.reverse (IUT.fromText t) == IUT.fromText (T.reverse t)
   , QC.testProperty "filter"      $ \p t -> IUT.filter p (IUT.fromText t) == IUT.fromText (T.filter p t)
   , QC.testProperty "replicate"   $ \n t -> IUT.replicate n (IUT.fromText t) == IUT.fromText (T.replicate n t)
+  , QC.testProperty "dropAround"  $ \p t -> IUT.dropAround p (IUT.fromText t) == IUT.fromText (T.dropAround p t)
 
   , QC.testProperty "splitAtEnd" $ \t ->
       let t' = IUT.fromText t
