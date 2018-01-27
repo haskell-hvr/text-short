@@ -1412,21 +1412,21 @@ writeCodePoint1 mba ofs (CP cp) =
 
 writeCodePoint2 :: MBA s -> B -> CP -> ST s ()
 writeCodePoint2 mba ofs (CP cp) = do
-  writeWord8Array mba  ofs    (0xc0 .|. (cp `shiftR` 6))
-  writeWord8Array mba (ofs+1) (0x80 .|. (cp               .&. 0x3f))
+  writeWord8Array mba  ofs    (0xc0 .|. (cp `unsafeShiftR` 6))
+  writeWord8Array mba (ofs+1) (0x80 .|. (cp                     .&. 0x3f))
 
 writeCodePoint3 :: MBA s -> B -> CP -> ST s ()
 writeCodePoint3 mba ofs (CP cp) = do
-  writeWord8Array mba  ofs    (0xe0 .|.  (cp `shiftR` 12))
-  writeWord8Array mba (ofs+1) (0x80 .|. ((cp `shiftR` 6)  .&. 0x3f))
-  writeWord8Array mba (ofs+2) (0x80 .|. (cp               .&. 0x3f))
+  writeWord8Array mba  ofs    (0xe0 .|.  (cp `unsafeShiftR` 12))
+  writeWord8Array mba (ofs+1) (0x80 .|. ((cp `unsafeShiftR` 6)  .&. 0x3f))
+  writeWord8Array mba (ofs+2) (0x80 .|.  (cp                    .&. 0x3f))
 
 writeCodePoint4 :: MBA s -> B -> CP -> ST s ()
 writeCodePoint4 mba ofs (CP cp) = do
-  writeWord8Array mba  ofs    (0xf0 .|.  (cp `shiftR` 18))
-  writeWord8Array mba (ofs+1) (0x80 .|. ((cp `shiftR` 12) .&. 0x3f))
-  writeWord8Array mba (ofs+2) (0x80 .|. ((cp `shiftR` 6)  .&. 0x3f))
-  writeWord8Array mba (ofs+3) (0x80 .|. (cp               .&. 0x3f))
+  writeWord8Array mba  ofs    (0xf0 .|.  (cp `unsafeShiftR` 18))
+  writeWord8Array mba (ofs+1) (0x80 .|. ((cp `unsafeShiftR` 12) .&. 0x3f))
+  writeWord8Array mba (ofs+2) (0x80 .|. ((cp `unsafeShiftR` 6)  .&. 0x3f))
+  writeWord8Array mba (ofs+3) (0x80 .|. (cp                     .&. 0x3f))
 
 writeRepChar :: MBA s -> B -> ST s ()
 writeRepChar mba ofs = do
