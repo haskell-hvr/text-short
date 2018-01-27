@@ -286,11 +286,11 @@ find p st = go 0
   where
     go !ofs
       | ofs >= sz  = Nothing
-      | otherwise  = let !cp = readCodePoint st ofs
-                         c = cp2ch cp
-                     in if p c
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq`
+                        if p c
                         then Just c
-                        else go (ofs + cpLen cp)
+                        else go ofs'
 
     !sz = toB st
 
@@ -310,10 +310,11 @@ findIndex p st = go 0 0
   where
     go !ofs !i
       | ofs >= sz  = Nothing
-      | otherwise  = let !cp = readCodePoint st ofs
-                     in if p (cp2ch cp)
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq`
+                        if p c
                         then Just i
-                        else go (ofs+cpLen cp) (i+1)
+                        else go ofs' (i+1)
 
     !sz = toB st
 
@@ -324,10 +325,10 @@ findOfs p st = go
   where
     go :: B -> Maybe B
     go !ofs | ofs >= sz  = Nothing
-    go !ofs | p (cp2ch cp) = Just ofs
-            | otherwise    = go (ofs+cpLen cp)
+    go !ofs | p c       = Just ofs
+            | otherwise = go ofs'
       where
-        !cp = readCodePoint st ofs
+        (c,ofs') = decodeCharAtOfs st ofs
 
     !sz = toB st
 
@@ -819,8 +820,8 @@ intersperse c st
   | null st = mempty
   | sn == 1 = st
   | otherwise = create newsz $ \mba -> do
-      let cp0 = readCodePoint st 0
-          cp0sz = cpLen cp0
+      let !cp0 = readCodePoint st 0
+          !cp0sz = cpLen cp0
       writeCodePointN cp0sz mba 0 cp0
       go mba (sn - 1) cp0sz cp0sz
   where
@@ -833,8 +834,8 @@ intersperse c st
     go :: MBA s -> Int -> B -> B -> ST s ()
     go _   0 !_  !_   = return ()
     go mba n ofs ofs2 = do
-      let cp1 = readCodePoint st ofs2
-          cp1sz = cpLen cp1
+      let !cp1 = readCodePoint st ofs2
+          !cp1sz = cpLen cp1
       writeCodePointN csz   mba ofs cp
       writeCodePointN cp1sz mba (ofs+csz) cp1
       go mba (n-1) (ofs+csz+cp1sz) (ofs2+cp1sz)
@@ -913,9 +914,9 @@ reverse st
     go :: Int -> B -> MBA s -> ST s ()
     go 0 !_  _   = return ()
     go i ofs mba = do
-      let cp   = readCodePoint st ofs
-          cpsz = cpLen cp
-          ofs' = ofs+cpsz
+      let !cp   = readCodePoint st ofs
+          !cpsz = cpLen cp
+          !ofs' = ofs+cpsz
       writeCodePointN cpsz mba (sz - ofs') cp
       go (i-1) ofs' mba
 
@@ -1138,6 +1139,40 @@ cpLen (CP cp)
   | cp <   0x800  = B 2
   | cp < 0x10000  = B 3
   | otherwise     = B 4
+
+-- convenience wrapper; unsafe like readCodePoint
+{-# INLINE decodeCharAtOfs #-}
+decodeCharAtOfs :: ShortText -> B -> (Char,B)
+decodeCharAtOfs st ofs = (c,ofs')
+  where
+    c    = cp2ch cp
+    ofs' = ofs + cpLen cp
+    cp   = readCodePoint st ofs
+{- pure version of decodeCharAtOfs, but unfortunately significantly slower
+
+decodeCharAtOfs st ofs
+  | b0 < 0x80 = (cp2ch $ CP b0,ofs + B 1)
+  | otherwise = case b0 `unsafeShiftR` 4 of
+                  0xf -> (cp2ch $ CP go4, ofs + B 4)
+                  0xe -> (cp2ch $ CP go3, ofs + B 3)
+                  _   -> (cp2ch $ CP go2, ofs + B 2)
+  where
+    b0    = buf 0
+    buf j = indexWord8Array st (ofs+j)
+
+    go2 =     ((b0    .&. 0x1f) `unsafeShiftL` 6)
+          .|.  (buf 1 .&. 0x3f)
+
+    go3 =     ((b0    .&. 0x0f) `unsafeShiftL` (6+6))
+          .|. ((buf 1 .&. 0x3f) `unsafeShiftL` 6)
+          .|.  (buf 2 .&. 0x3f)
+
+    go4 =     ((b0    .&. 0x07) `unsafeShiftL` (6+6+6))
+          .|. ((buf 1 .&. 0x3f) `unsafeShiftL` (6+6))
+          .|. ((buf 2 .&. 0x3f) `unsafeShiftL` 6)
+          .|.  (buf 3 .&. 0x3f)
+-}
+
 
 -- | \(\mathcal{O}(1)\) Construct 'ShortText' from single codepoint.
 --
