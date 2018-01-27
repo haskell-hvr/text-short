@@ -21,6 +21,10 @@ module Data.Text.Short.Partial
     , init
     , last
     , index
+
+    , foldl1
+    , foldl1'
+    , foldr1
     ) where
 
 import           Data.Text.Short

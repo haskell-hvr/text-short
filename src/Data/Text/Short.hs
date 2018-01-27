@@ -86,6 +86,11 @@ module Data.Text.Short
     , reverse
     , filter
 
+      -- * Folds
+    , foldl
+    , foldl'
+    , foldr
+
       -- * Conversions
       -- ** 'String'
     , fromString

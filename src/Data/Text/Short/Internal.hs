@@ -57,6 +57,13 @@ module Data.Text.Short.Internal
     , filter
     , dropAround
 
+    , foldl
+    , foldl'
+    , foldr
+    , foldl1
+    , foldl1'
+    , foldr1
+
       -- * Conversions
       -- ** 'Char'
     , singleton
@@ -119,7 +126,8 @@ import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
 import           Prelude                        hiding (all, any, break, concat,
-                                                 drop, dropWhile, filter, head,
+                                                 drop, dropWhile, filter, foldl,
+                                                 foldl1, foldr, foldr1, head,
                                                  init, last, length, null,
                                                  replicate, reverse, span,
                                                  splitAt, tail, take, takeWhile)
@@ -423,6 +431,130 @@ toString st = go 0
       | ofs >= sz  = []
       | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
                      in c `seq` ofs' `seq` (c : go ofs')
+
+    !sz = toB st
+
+----------------------------------------------------------------------------
+-- Folds
+
+-- | \(\mathcal{O}(n)\) Reduces the characters of the 'ShortText' with
+-- the binary operator and an initial in forward direction (i.e. from
+-- left to right).
+--
+-- >>> foldl (\_ _ -> True) False ""
+-- False
+--
+-- >>> foldl (\s c -> c : s) ['.'] "abcd"
+-- "dcba."
+--
+-- @since 0.1.2
+foldl :: (a -> Char -> a) -> a -> ShortText -> a
+foldl f z st = go 0 z
+  where
+    go !ofs acc
+      | ofs >= sz  = acc
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq` go ofs' (f acc c)
+
+    !sz = toB st
+
+-- | \(\mathcal{O}(n)\) Reduces the characters of the 'ShortText' with the binary operator.
+--
+-- >>> foldl1 max "abcdcba"
+-- 'd'
+--
+-- >>> foldl1 const "abcd"
+-- 'a'
+--
+-- >>> foldl1 (flip const) "abcd"
+-- 'd'
+--
+-- __Note__: Will throw an 'error' exception if index is out of bounds.
+--
+-- @since 0.1.2
+foldl1 :: (Char -> Char -> Char) -> ShortText -> Char
+foldl1 f st
+  | sz == 0    = error "foldl1: empty ShortText"
+  | otherwise  = go c0sz c0
+  where
+    go !ofs acc
+      | ofs >= sz  = acc
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq` go ofs' (f acc c)
+    !sz = toB st
+    (c0,c0sz) = decodeCharAtOfs st (B 0)
+
+-- | \(\mathcal{O}(n)\) Strict version of 'foldl'.
+--
+-- @since 0.1.2
+foldl' :: (a -> Char -> a) -> a -> ShortText -> a
+foldl' f !z st = go 0 z
+  where
+    go !ofs !acc
+      | ofs >= sz  = acc
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq` go ofs' (f acc c)
+
+    !sz = toB st
+
+-- | \(\mathcal{O}(n)\) Strict version of 'foldl1'.
+--
+-- @since 0.1.2
+foldl1' :: (Char -> Char -> Char) -> ShortText -> Char
+foldl1' f st
+  | sz == 0    = error "foldl1: empty ShortText"
+  | otherwise  = go c0sz c0
+  where
+    go !ofs !acc
+      | ofs >= sz  = acc
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq` go ofs' (f acc c)
+    !sz = toB st
+    (c0,c0sz) = decodeCharAtOfs st (B 0)
+
+-- | \(\mathcal{O}(n)\) Reduces the characters of the 'ShortText' with
+-- the binary operator and an initial in reverse direction (i.e. from
+-- right to left).
+--
+-- >>> foldr (\_ _ -> True) False ""
+-- False
+--
+-- >>> foldr (:) ['.'] "abcd"
+-- "abcd."
+--
+-- @since 0.1.2
+foldr :: (Char -> a -> a) -> a -> ShortText -> a
+foldr f z st = go 0
+  where
+    go !ofs
+      | ofs >= sz  = z
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq` f c (go ofs')
+
+    !sz = toB st
+
+-- | \(\mathcal{O}(n)\) Reduces the characters of the 'ShortText' with the binary operator.
+--
+-- >>> foldr1 max "abcdcba"
+-- 'd'
+--
+-- >>> foldr1 const "abcd"
+-- 'a'
+--
+-- >>> foldr1 (flip const) "abcd"
+-- 'd'
+--
+-- __Note__: Will throw an 'error' exception if index is out of bounds.
+--
+-- @since 0.1.2
+foldr1 :: (Char -> Char -> Char) -> ShortText -> Char
+foldr1 f st
+  | sz == 0    = error "foldr1: empty ShortText"
+  | otherwise  = go 0
+  where
+    go !ofs = let (c,ofs') = decodeCharAtOfs st ofs
+              in c `seq` ofs' `seq`
+                 (if ofs' >= sz then c else f c (go ofs'))
 
     !sz = toB st
 

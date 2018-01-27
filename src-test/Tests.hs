@@ -11,6 +11,7 @@ import qualified Data.String               as D.S
 import qualified Data.Text                 as T
 import qualified Data.Text.Encoding        as T
 import qualified Data.Text.Short           as IUT
+import qualified Data.Text.Short.Partial   as IUT
 import           Test.QuickCheck.Instances ()
 import           Test.Tasty
 import           Test.Tasty.HUnit
@@ -79,6 +80,22 @@ qcProps = testGroup "Properties"
   , QC.testProperty "filter"      $ \p t -> IUT.filter p (IUT.fromText t) == IUT.fromText (T.filter p t)
   , QC.testProperty "replicate"   $ \n t -> IUT.replicate n (IUT.fromText t) == IUT.fromText (T.replicate n t)
   , QC.testProperty "dropAround"  $ \p t -> IUT.dropAround p (IUT.fromText t) == IUT.fromText (T.dropAround p t)
+
+  , QC.testProperty "foldl"       $ \f z t -> IUT.foldl f (z :: Char) (IUT.fromText t) == T.foldl f (z :: Char) t
+  , QC.testProperty "foldl #2"    $ \t -> IUT.foldl (\n _ -> (n+1)) 0 (IUT.fromText t) == T.length t
+  , QC.testProperty "foldl #3"    $ \t -> IUT.foldl (\s c -> c : s) [] (IUT.fromText t) == T.unpack (T.reverse t)
+
+  , QC.testProperty "foldl'"      $ \f z t -> IUT.foldl' f (z :: Char) (IUT.fromText t) == T.foldl' f (z :: Char) t
+  , QC.testProperty "foldl' #2"   $ \t -> IUT.foldl' (\n _ -> (n+1)) 0 (IUT.fromText t) == T.length t
+  , QC.testProperty "foldl' #3"   $ \t -> IUT.foldl' (\s c -> c : s) [] (IUT.fromText t) == T.unpack (T.reverse t)
+
+  , QC.testProperty "foldr"       $ \f z t -> IUT.foldr f (z :: Char) (IUT.fromText t) == T.foldr f (z :: Char) t
+  , QC.testProperty "foldr #2"    $ \t -> IUT.foldr (\_ n -> (n+1)) 0 (IUT.fromText t) == T.length t
+  , QC.testProperty "foldr #3"    $ \t -> IUT.foldr (:) [] (IUT.fromText t) == T.unpack t
+
+  , QC.testProperty "foldr1"      $ \f t -> (not (T.null t)) ==> IUT.foldr1 f (IUT.fromText t) == T.foldr1 f t
+  , QC.testProperty "foldl1"      $ \f t -> (not (T.null t)) ==> IUT.foldl1 f (IUT.fromText t) == T.foldl1 f t
+  , QC.testProperty "foldl1'"     $ \f t -> (not (T.null t)) ==> IUT.foldl1' f (IUT.fromText t) == T.foldl1' f t
 
   , QC.testProperty "splitAtEnd" $ \t ->
       let t' = IUT.fromText t
