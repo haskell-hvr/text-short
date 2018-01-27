@@ -699,9 +699,11 @@ encodeStringShort te = BSS.toShort . encodeString te
 isValidUtf8 :: ShortText -> Bool
 isValidUtf8 st = (==0) $ unsafeDupablePerformIO (c_text_short_is_valid_utf8 (toByteArray# st) (toCSize st))
 
+type CCodePoint = Word
+
 foreign import ccall unsafe "hs_text_short_is_valid_utf8" c_text_short_is_valid_utf8 :: ByteArray# -> CSize -> IO CInt
 
-foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteArray# -> CSize -> CSize -> IO Word32
+foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteArray# -> CSize -> CSize -> IO CCodePoint
 
 -- | \(\mathcal{O}(n)\) Lookup /i/-th code-point in 'ShortText'.
 --
@@ -719,8 +721,7 @@ indexMaybe st i
   | i < 0      = Nothing
   | otherwise  = cp2chSafe cp
   where
-    cp = CP $ fromIntegral $
-         unsafeDupablePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
+    cp = CP $ unsafeDupablePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
 
 -- | \(\mathcal{O}(n)\) Lookup /i/-th code-point from the end of 'ShortText'.
 --
@@ -738,10 +739,9 @@ indexEndMaybe st i
   | i < 0      = Nothing
   | otherwise  = cp2chSafe cp
   where
-    cp = CP $ fromIntegral $
-         unsafeDupablePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
+    cp = CP $ unsafeDupablePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
 
-foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev :: ByteArray# -> CSize -> CSize -> IO Word32
+foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev :: ByteArray# -> CSize -> CSize -> IO CCodePoint
 
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
@@ -1437,15 +1437,15 @@ writeRepChar mba ofs = do
 -- beware: UNSAFE!
 readCodePoint :: ShortText -> B -> CP
 readCodePoint st (csizeFromB -> ofs)
-  = CP $ fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp (toByteArray# st) ofs)
+  = CP $ unsafeDupablePerformIO (c_text_short_ofs_cp (toByteArray# st) ofs)
 
-foreign import ccall unsafe "hs_text_short_ofs_cp" c_text_short_ofs_cp :: ByteArray# -> CSize -> IO Word32
+foreign import ccall unsafe "hs_text_short_ofs_cp" c_text_short_ofs_cp :: ByteArray# -> CSize -> IO CCodePoint
 
 readCodePointRev :: ShortText -> B -> CP
 readCodePointRev st (csizeFromB -> ofs)
-  = CP $ fromIntegral $ unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByteArray# st) ofs)
+  = CP $ unsafeDupablePerformIO (c_text_short_ofs_cp_rev (toByteArray# st) ofs)
 
-foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :: ByteArray# -> CSize -> IO Word32
+foreign import ccall unsafe "hs_text_short_ofs_cp_rev" c_text_short_ofs_cp_rev :: ByteArray# -> CSize -> IO CCodePoint
 
 ----------------------------------------------------------------------------
 -- string & list literals

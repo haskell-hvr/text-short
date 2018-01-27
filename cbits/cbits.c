@@ -71,6 +71,9 @@ const static bool is_bigendian = false;
 /* test whether octet in UTF-8 steam is not a continuation byte, i.e. a leading byte */
 #define utf8_lead_p(octet) (((octet) & 0xc0) != 0x80)
 
+/* 0 <= x <= 0x110000 */
+typedef HsWord codepoint_t;
+
 /* Count number of code-points in well-formed utf8 string */
 size_t
 hs_text_short_length(const uint8_t buf[], const size_t n)
@@ -246,14 +249,14 @@ hs_text_short_decode_cp(const uint8_t buf[])
 }
 
 /* decode codepoint starting at buf[ofs] */
-uint32_t
+codepoint_t
 hs_text_short_ofs_cp(const uint8_t buf[], const size_t ofs)
 {
   return hs_text_short_decode_cp(buf+ofs);
 }
 
 /* reverse-decode codepoint starting at offset right after a code-point */
-uint32_t
+codepoint_t
 hs_text_short_ofs_cp_rev(const uint8_t *buf, const size_t ofs)
 {
   /*  7 bits | 0xxxxxxx
@@ -314,30 +317,30 @@ hs_text_short_ofs_cp_rev(const uint8_t *buf, const size_t ofs)
 
 /* Retrieve i-th code-point in (valid) UTF8 stream
  *
- * Returns 0xFFFFFFFF if out of bounds
+ * Returns -1 if out of bounds
  */
-uint32_t
+codepoint_t
 hs_text_short_index_cp(const uint8_t buf[], const size_t n, const size_t i)
 {
   const size_t ofs = hs_text_short_index_ofs(buf, n, i);
 
   if (ofs >= n)
-    return UINT32_C(0xffffffff);
+    return -1;
 
   return hs_text_short_decode_cp(&buf[ofs]);
 }
 
 /* Retrieve i-th code-point in (valid) UTF8 stream
  *
- * Returns 0xFFFFFFFF if out of bounds
+ * Returns -1 if out of bounds
  */
-uint32_t
+codepoint_t
 hs_text_short_index_cp_rev(const uint8_t buf[], const size_t n, const size_t i)
 {
   const size_t ofs = hs_text_short_index_ofs_rev(buf, n, i);
 
   if (ofs >= n)
-    return UINT32_C(0xffffffff);
+    return -1;
 
   return hs_text_short_decode_cp(&buf[ofs]);
 }
