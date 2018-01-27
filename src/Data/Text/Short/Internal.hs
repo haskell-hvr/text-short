@@ -414,7 +414,17 @@ toBuilder = BB.shortByteString . toShortByteString
 --
 -- @since 0.1
 toString :: ShortText -> String
-toString = decodeStringShort' utf8 . toShortByteString
+-- NOTE: impl below beats
+--   toString = decodeStringShort' utf8 . toShortByteString
+-- except for smallish strings
+toString st = go 0
+  where
+    go !ofs
+      | ofs >= sz  = []
+      | otherwise  = let (c,ofs') = decodeCharAtOfs st ofs
+                     in c `seq` ofs' `seq` (c : go ofs')
+
+    !sz = toB st
 
 -- | \(\mathcal{O}(n)\) Convert to 'T.Text'
 --
@@ -1064,6 +1074,11 @@ writeWord8Array :: MBA s -> B -> Word -> ST s ()
 writeWord8Array (MBA# mba#) (B (I# i#)) (W# w#)
   = ST $ \s -> case GHC.Exts.writeWord8Array# mba# i# w# s of
                  s' -> (# s', () #)
+{- not needed yet
+{-# INLINE indexWord8Array #-}
+indexWord8Array :: ShortText -> B -> Word
+indexWord8Array (ShortText (BSSI.SBS ba#)) (B (I# i#)) = W# (GHC.Exts.indexWord8Array# ba# i#)
+-}
 
 {-# INLINE copyAddrToByteArray #-}
 copyAddrToByteArray :: Ptr a -> MBA RealWorld -> B -> B -> ST RealWorld ()
