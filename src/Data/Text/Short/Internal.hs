@@ -592,10 +592,8 @@ fromString []  = mempty
 fromString [c] = singleton c
 fromString s = ShortText . encodeStringShort utf8 . map r $ s
   where
-    r c | 0xd800 <= x && x < 0xe000 = '\xFFFD'
-        | otherwise                 = c
-      where
-        x = ord c
+    r c | isSurr (ord c) = '\xFFFD'
+        | otherwise      = c
 
 -- | \(\mathcal{O}(n)\) Construct 'ShortText' from 'T.Text'
 --
@@ -1263,8 +1261,15 @@ copyByteArray2 (MBA# src#) (B (I# src_off#)) (MBA# dst#) (B (I# dst_off#)) (B( I
 -- Keeping it as a 'Word' is more convenient for bit-ops and FFI
 newtype CP = CP Word
 
+{-# INLINE ch2cp #-}
 ch2cp :: Char -> CP
-ch2cp = CP . fromIntegral . ord
+ch2cp (ord -> ci)
+  | isSurr ci  = CP 0xFFFD
+  | otherwise  = CP (fromIntegral ci)
+
+{-# INLINE isSurr #-}
+isSurr :: (Num i, Bits i) => i -> Bool
+isSurr ci = ci .&. 0xfff800 == 0xd800
 
 {-# INLINE cp2ch #-}
 cp2ch :: CP -> Char
@@ -1343,8 +1348,6 @@ singleton' :: CP -> ShortText
 singleton' cp@(CP cpw)
   | cpw <    0x80  = create 1 $ \mba -> writeCodePoint1 mba 0 cp
   | cpw <   0x800  = create 2 $ \mba -> writeCodePoint2 mba 0 cp
-  | cpw <  0xd800  = create 3 $ \mba -> writeCodePoint3 mba 0 cp
-  | cpw <  0xe000  = create 3 $ \mba -> writeRepChar    mba 0
   | cpw < 0x10000  = create 3 $ \mba -> writeCodePoint3 mba 0 cp
   | otherwise      = create 4 $ \mba -> writeCodePoint4 mba 0 cp
 
@@ -1358,8 +1361,6 @@ cons (ch2cp -> cp@(CP cpw)) sfx
   | n == 0         = singleton' cp
   | cpw <    0x80  = create (n+1) $ \mba -> writeCodePoint1 mba 0 cp >> copySfx 1 mba
   | cpw <   0x800  = create (n+2) $ \mba -> writeCodePoint2 mba 0 cp >> copySfx 2 mba
-  | cpw <  0xd800  = create (n+3) $ \mba -> writeCodePoint3 mba 0 cp >> copySfx 3 mba
-  | cpw <  0xe000  = create (n+3) $ \mba -> writeRepChar    mba 0    >> copySfx 3 mba
   | cpw < 0x10000  = create (n+3) $ \mba -> writeCodePoint3 mba 0 cp >> copySfx 3 mba
   | otherwise      = create (n+4) $ \mba -> writeCodePoint4 mba 0 cp >> copySfx 4 mba
   where
@@ -1378,8 +1379,6 @@ snoc pfx (ch2cp -> cp@(CP cpw))
   | n == 0         = singleton' cp
   | cpw <    0x80  = create (n+1) $ \mba -> copyPfx mba >> writeCodePoint1 mba n cp
   | cpw <   0x800  = create (n+2) $ \mba -> copyPfx mba >> writeCodePoint2 mba n cp
-  | cpw <  0xd800  = create (n+3) $ \mba -> copyPfx mba >> writeCodePoint3 mba n cp
-  | cpw <  0xe000  = create (n+3) $ \mba -> copyPfx mba >> writeRepChar    mba n
   | cpw < 0x10000  = create (n+3) $ \mba -> copyPfx mba >> writeCodePoint3 mba n cp
   | otherwise      = create (n+4) $ \mba -> copyPfx mba >> writeCodePoint4 mba n cp
   where
@@ -1393,8 +1392,6 @@ writeCodePoint :: MBA s -> Int -> Word -> ST s ()
 writeCodePoint mba ofs cp
   | cp <    0x80  = writeCodePoint1 mba ofs cp
   | cp <   0x800  = writeCodePoint2 mba ofs cp
-  | cp <  0xd800  = writeCodePoint3 mba ofs cp
-  | cp <  0xe000  = writeRepChar mba ofs
   | cp < 0x10000  = writeCodePoint3 mba ofs cp
   | otherwise     = writeCodePoint4 mba ofs cp
 -}
@@ -1427,12 +1424,6 @@ writeCodePoint4 mba ofs (CP cp) = do
   writeWord8Array mba (ofs+1) (0x80 .|. ((cp `unsafeShiftR` 12) .&. 0x3f))
   writeWord8Array mba (ofs+2) (0x80 .|. ((cp `unsafeShiftR` 6)  .&. 0x3f))
   writeWord8Array mba (ofs+3) (0x80 .|. (cp                     .&. 0x3f))
-
-writeRepChar :: MBA s -> B -> ST s ()
-writeRepChar mba ofs = do
-  writeWord8Array mba ofs     0xef
-  writeWord8Array mba (ofs+1) 0xbf
-  writeWord8Array mba (ofs+2) 0xbd
 
 -- beware: UNSAFE!
 readCodePoint :: ShortText -> B -> CP
