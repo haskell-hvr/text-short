@@ -94,13 +94,13 @@ module Data.Text.Short.Internal
 import           Control.DeepSeq                (NFData)
 import           Control.Monad.ST               (stToIO)
 import           Data.Binary
-import           Data.Bits                      (shiftR, (.&.), (.|.))
+import           Data.Bits
 import qualified Data.ByteString                as BS
 import qualified Data.ByteString.Builder        as BB
 import           Data.ByteString.Short          (ShortByteString)
 import qualified Data.ByteString.Short          as BSS
 import qualified Data.ByteString.Short.Internal as BSSI
-import           Data.Char                      (chr, ord)
+import           Data.Char                      (ord)
 import           Data.Hashable                  (Hashable)
 import qualified Data.List                      as List
 import           Data.Maybe                     (fromMaybe, isNothing)
@@ -109,6 +109,7 @@ import qualified Data.String                    as S
 import qualified Data.Text                      as T
 import qualified Data.Text.Encoding             as T
 import           Foreign.C
+import           GHC.Base                       (assert, unsafeChr)
 import qualified GHC.CString                    as GHC
 import           GHC.Exts                       (Addr#, ByteArray#, Int (I#),
                                                  Int#, MutableByteArray#,
@@ -572,9 +573,8 @@ foreign import ccall unsafe "hs_text_short_index_cp" c_text_short_index :: ByteA
 -- @since 0.1.2
 indexMaybe :: ShortText -> Int -> Maybe Char
 indexMaybe st i
-  | i < 0               = Nothing
-  | unCP cp < 0x110000  = Just (cp2ch cp)
-  | otherwise           = Nothing
+  | i < 0      = Nothing
+  | otherwise  = cp2chSafe cp
   where
     cp = CP $ fromIntegral $
          unsafeDupablePerformIO (c_text_short_index (toByteArray# st) (toCSize st) (fromIntegral i))
@@ -592,9 +592,8 @@ indexMaybe st i
 -- @since 0.1.2
 indexEndMaybe :: ShortText -> Int -> Maybe Char
 indexEndMaybe st i
-  | i < 0               = Nothing
-  | unCP cp < 0x110000  = Just (cp2ch cp)
-  | otherwise           = Nothing
+  | i < 0      = Nothing
+  | otherwise  = cp2chSafe cp
   where
     cp = CP $ fromIntegral $
          unsafeDupablePerformIO (c_text_short_index_rev (toByteArray# st) (toCSize st) (fromIntegral i))
@@ -1114,13 +1113,23 @@ copyByteArray2 (MBA# src#) (B (I# src_off#)) (MBA# dst#) (B (I# dst_off#)) (B( I
 -- | Unicode Code-point
 --
 -- Keeping it as a 'Word' is more convenient for bit-ops and FFI
-newtype CP = CP { unCP :: Word }
+newtype CP = CP Word
 
 ch2cp :: Char -> CP
 ch2cp = CP . fromIntegral . ord
 
+{-# INLINE cp2ch #-}
 cp2ch :: CP -> Char
-cp2ch = chr . fromIntegral . unCP
+cp2ch (CP w) = (w < 0x110000) `assert` unsafeChr (fromIntegral w)
+
+-- used/needed by index-lookup functions to encode out of bounds
+cp2chSafe :: CP -> Maybe Char
+cp2chSafe cp
+  | cpNull cp = Nothing
+  | otherwise = Just $! cp2ch cp
+  where
+    cpNull :: CP -> Bool
+    cpNull (CP w) = w >= 0x110000
 
 {-# INLINE cpLen #-}
 cpLen :: CP -> B

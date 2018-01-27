@@ -1,4 +1,5 @@
 packages: .
-
 tests: True
-flags: +asserts
+
+package text-short
+  flags: +asserts
