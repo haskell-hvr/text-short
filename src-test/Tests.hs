@@ -21,7 +21,7 @@ import           Text.Show.Functions       ()
 fromByteStringRef = either (const Nothing) (Just . IUT.fromText) . T.decodeUtf8'
 
 main :: IO ()
-main = defaultMain tests
+main = defaultMain (adjustOption (QuickCheckTests 50000 `max`) $ tests)
 
 tests :: TestTree
 tests = testGroup "Tests" [unitTests,qcProps]

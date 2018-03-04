@@ -83,7 +83,7 @@ test-suite tests
                , text-short
                  -- deps which don't inherit constraints from library stanza:
                , tasty                >= 1.0.0  && < 1.1
-               , tasty-quickcheck     >= 0.9.2  && < 0.10
+               , tasty-quickcheck     >= 0.10   && < 0.11
                , tasty-hunit          >= 0.10.0 && < 0.11
                , quickcheck-instances >= 0.3.14 && < 0.4
 
