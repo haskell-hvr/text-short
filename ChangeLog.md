@@ -1,10 +1,71 @@
-# Revision history for `text-short`
+## 0.1.2
 
-## 0.1
+  * Expose partial functions via new `Data.Text.Short.Partial` module
 
-* First version. Released on an unsuspecting world.
+        foldl1 :: (Char -> Char -> Char) -> ShortText -> Char
+        foldl1' :: (Char -> Char -> Char) -> ShortText -> Char
+        foldr1 :: (Char -> Char -> Char) -> ShortText -> Char
+        head :: ShortText -> Char
+        index :: ShortText -> Int -> Char
+        init :: ShortText -> ShortText
+        last :: ShortText -> Char
+        tail :: ShortText -> ShortText
+
+  * Add several `Data.Text` verbs to `Data.Text.Short` API
+
+        (!?) :: ShortText -> Int -> Maybe Char
+        all :: (Char -> Bool) -> ShortText -> Bool
+        any :: (Char -> Bool) -> ShortText -> Bool
+        append :: ShortText -> ShortText -> ShortText
+        break :: (Char -> Bool) -> ShortText -> (ShortText, ShortText)
+        breakEnd :: (Char -> Bool) -> ShortText -> (ShortText, ShortText)
+        concat :: [ShortText] -> ShortText
+        cons :: Char -> ShortText -> ShortText
+        drop :: Int -> ShortText -> ShortText
+        dropAround :: (Char -> Bool) -> ShortText -> ShortText
+        dropEnd :: Int -> ShortText -> ShortText
+        dropWhile :: (Char -> Bool) -> ShortText -> ShortText
+        dropWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
+        empty :: ShortText
+        filter :: (Char -> Bool) -> ShortText -> ShortText
+        find :: (Char -> Bool) -> ShortText -> Maybe Char
+        findIndex :: (Char -> Bool) -> ShortText -> Maybe Int
+        foldl :: (a -> Char -> a) -> a -> ShortText -> a
+        foldl' :: (a -> Char -> a) -> a -> ShortText -> a
+        foldr :: (Char -> a -> a) -> a -> ShortText -> a
+        indexEndMaybe :: ShortText -> Int -> Maybe Char
+        indexMaybe :: ShortText -> Int -> Maybe Char
+        intercalate :: ShortText -> [ShortText] -> ShortText
+        intersperse :: Char -> ShortText -> ShortText
+        isPrefixOf :: ShortText -> ShortText -> Bool
+        isSuffixOf :: ShortText -> ShortText -> Bool
+        pack :: [Char] -> ShortText
+        replicate :: Int -> ShortText -> ShortText
+        reverse :: ShortText -> ShortText
+        singleton :: Char -> ShortText
+        snoc :: ShortText -> Char -> ShortText
+        span :: (Char -> Bool) -> ShortText -> (ShortText, ShortText)
+        spanEnd :: (Char -> Bool) -> ShortText -> (ShortText, ShortText)
+        splitAt :: Int -> ShortText -> (ShortText, ShortText)
+        splitAtEnd :: Int -> ShortText -> (ShortText, ShortText)
+        stripPrefix :: ShortText -> ShortText -> Maybe ShortText
+        stripSuffix :: ShortText -> ShortText -> Maybe ShortText
+        take :: Int -> ShortText -> ShortText
+        takeEnd :: Int -> ShortText -> ShortText
+        takeWhile :: (Char -> Bool) -> ShortText -> ShortText
+        takeWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
+        uncons :: ShortText -> Maybe (Char, ShortText)
+        unpack :: ShortText -> [Char]
+        unsnoc :: ShortText -> Maybe (ShortText, Char)
+
+  * Optimise low-level primitives
+  * Add support for GHC 8.4
 
 ## 0.1.1
 
 * Expose *unsafe* conversion API via `Data.Text.Short.Unsafe` module
 * Minor documentation improvement
+
+## 0.1
+
+* First version. Released on an unsuspecting world.
