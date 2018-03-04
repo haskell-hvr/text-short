@@ -1,5 +1,6 @@
 ## 0.1.2
 
+  * Add `IsList ShortText` and `PrintfArg ShortText` instances
   * Expose partial functions via new `Data.Text.Short.Partial` module
 
         foldl1 :: (Char -> Char -> Char) -> ShortText -> Char
