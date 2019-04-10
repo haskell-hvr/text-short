@@ -108,6 +108,9 @@ import           Data.ByteString.Short          (ShortByteString)
 import qualified Data.ByteString.Short          as BSS
 import qualified Data.ByteString.Short.Internal as BSSI
 import           Data.Char                      (ord)
+import           Data.Data                      (Data(..),constrIndex, Constr,
+                                                 mkConstr, DataType, mkDataType,
+                                                 Fixity(Prefix))
 import           Data.Hashable                  (Hashable)
 import qualified Data.List                      as List
 import           Data.Maybe                     (fromMaybe, isNothing)
@@ -152,7 +155,31 @@ import qualified PrimOps
 --
 -- @since 0.1
 newtype ShortText = ShortText ShortByteString
-                  deriving (Monoid,Data.Semigroup.Semigroup,Hashable,NFData)
+                  deriving (Hashable,Monoid,NFData,Data.Semigroup.Semigroup)
+
+#if MIN_VERSION_base(4,8,0)
+-- |It exposes a similar 'Data' instance abstraction as 'Text',
+-- preserving the @[Char]@ data abstraction at the cost of inefficiency.
+--
+-- @since 0.1.3
+instance Data ShortText where
+
+  gfoldl f z txt = z fromString `f` (toString txt)
+
+  toConstr _ = mkConstr shortTextDataType "fromString" [] Prefix
+
+  gunfold k z c = case constrIndex c of
+    1 -> k (z fromString)
+    _ -> error "gunfold"
+
+  dataTypeOf _ = shortTextDataType
+#endif
+
+packConstr :: Constr
+packConstr = mkConstr shortTextDataType "fromString" [] Prefix
+
+shortTextDataType :: DataType
+shortTextDataType = mkDataType "Data.Text.Short" [packConstr]
 
 instance Eq ShortText where
   {-# INLINE (==) #-}
