@@ -1,3 +1,7 @@
+## 0.1.3
+
+  * Add `Data ShortText` instance
+
 ## 0.1.2
 
   * Add `IsList ShortText` and `PrintfArg ShortText` instances
