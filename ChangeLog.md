@@ -1,3 +1,7 @@
+## 0.1.3
+
+  * Expose `Data.Text.Internal` module
+
 ## 0.1.2
 
   * Add `IsList ShortText` and `PrintfArg ShortText` instances
