@@ -76,6 +76,9 @@ module Data.Text.Short
     , spanEnd
     , breakEnd
 
+      -- ** Breaking into many substrings
+    , split
+
       -- ** Suffix & Prefix operations
     , stripPrefix
     , stripSuffix
@@ -321,6 +324,29 @@ dropWhile p = snd . span p
 -- @since 0.1.2
 dropWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
 dropWhileEnd p = fst . spanEnd p
+
+-- | \(\mathcal{O}(n)\) Splits a string into components delimited by separators,
+-- where the predicate returns True for a separator element.  The
+-- resulting components do not contain the separators.  Two adjacent
+-- separators result in an empty component in the output.  eg.
+--
+-- >>> split (=='a') "aabbaca"
+-- ["","","bb","c",""]
+--
+-- >>> split (=='a') ""
+-- [""]
+--
+-- prop> intercalate (singleton c) (split (== c) t) = t
+--
+-- @since UNRELEASED
+split :: (Char -> Bool) -> ShortText -> [ShortText]
+split p st0 = loop st0
+  where
+    loop st =
+      let (x, rest) = span (not . p) st
+      in case uncons rest of
+        Nothing -> [st]
+        Just (_, rest') -> x : loop rest'
 
 -- $setup
 -- >>> :set -XOverloadedStrings

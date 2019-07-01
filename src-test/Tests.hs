@@ -72,6 +72,9 @@ qcProps = testGroup "Properties"
       let t' = IUT.fromText t
           mapBoth f (x,y) = (f x, f y)
       in and [ mapBoth IUT.toText (IUT.splitAt i t') == T.splitAt i t | i <- [-5 .. 5+T.length t ] ]
+  , QC.testProperty "intercalate/split" $ \t c ->
+      let t' = IUT.fromText t
+      in IUT.intercalate (IUT.singleton c) (IUT.split (== c) t') == t'
 
   , QC.testProperty "intersperse" $ \t c -> IUT.intersperse c (IUT.fromText t) == IUT.fromText (T.intersperse c t)
   , QC.testProperty "intercalate" $ \t1 t2 -> IUT.intercalate (IUT.fromText t1) (map IUT.fromText t2) == IUT.fromText (T.intercalate t1 t2)
@@ -166,6 +169,7 @@ unitTests = testGroup "Unit-tests"
   , testCase "singleton" $ [ c | c <- [minBound..maxBound], IUT.singleton c /= IUT.fromText (T.singleton c) ] @?= []
 
   , testCase "splitAtEnd" $ IUT.splitAtEnd 1 "€€" @?= ("€","€")
+  , testCase "split" $ IUT.split (== 'a') "aabbaca" @?= ["", "", "bb", "c", ""]
 
   , testCase "literal0" $ IUT.unpack testLit0 @?= []
   , testCase "literal1" $ IUT.unpack testLit1 @?= ['€','\0','€','\0']
