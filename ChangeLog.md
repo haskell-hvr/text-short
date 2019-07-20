@@ -4,6 +4,9 @@
   * Define `Typeable ShortText` also for GHC 7.8 as well
     (NB: for GHC 7.10.3 and up `Typeable` instances are automatically
      defined even when not mentioned explicitly in a `deriving` clause)
+  * Add equivalent verb `Data.Text.split` to `Data.Text.Short` API
+
+        split :: (Char -> Bool) -> ShortText -> [ShortText]
 
 ## 0.1.2
 

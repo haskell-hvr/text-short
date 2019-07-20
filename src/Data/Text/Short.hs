@@ -338,7 +338,9 @@ dropWhileEnd p = fst . spanEnd p
 --
 -- prop> intercalate (singleton c) (split (== c) t) = t
 --
--- @since UNRELEASED
+-- __NOTE__: 'split' never returns an empty list to match the semantics of its counterpart from "Data.Text".
+--
+-- @since 0.1.3
 split :: (Char -> Bool) -> ShortText -> [ShortText]
 split p st0 = loop st0
   where

@@ -161,7 +161,7 @@ import qualified PrimOps
 newtype ShortText = ShortText ShortByteString
                   deriving (Hashable,Monoid,NFData,Data.Semigroup.Semigroup,Typeable)
 
--- | It exposes a similar 'Data' instance abstraction as 'Text' (see
+-- | It exposes a similar 'Data' instance abstraction as 'T.Text' (see
 -- discussion referenced there for more details), preserving the
 -- @[Char]@ data abstraction at the cost of inefficiency.
 --
@@ -1477,7 +1477,7 @@ instance GHC.Exts.IsList ShortText where
 
 -- | __Note__: Surrogate pairs (@[U+D800 .. U+DFFF]@) in string literals are replaced by U+FFFD.
 --
--- This matches the behaviour of 'IsString' instance for 'T.Text'.
+-- This matches the behaviour of 'S.IsString' instance for 'T.Text'.
 instance S.IsString ShortText where
     fromString = fromStringLit
 
