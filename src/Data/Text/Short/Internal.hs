@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns               #-}
 {-# LANGUAGE CPP                        #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MagicHash                  #-}
 {-# LANGUAGE RankNTypes                 #-}
@@ -112,6 +113,7 @@ import           Data.Data                      (Data(..),constrIndex, Constr,
                                                  mkConstr, DataType, mkDataType,
                                                  Fixity(Prefix))
 import           Data.Hashable                  (Hashable)
+import           Data.Typeable                  (Typeable)
 import qualified Data.List                      as List
 import           Data.Maybe                     (fromMaybe, isNothing)
 import           Data.Semigroup
@@ -153,27 +155,24 @@ import qualified PrimOps
 -- In comparison, the footprint of a boxed 'ShortText' is only 4 words (i.e. 32 bytes on 64-bit systems) plus 1, 2, 3, or 4 bytes per code-point (due to the internal UTF-8 representation).
 -- It can be shown that for realistic data <http://utf8everywhere.org/#asian UTF-16 has a space overhead of 50% over UTF-8>.
 --
+-- __NOTE__: The `Typeable` instance isn't defined for GHC 7.8 (and older) prior to @text-short-0.1.3@
+--
 -- @since 0.1
 newtype ShortText = ShortText ShortByteString
-                  deriving (Hashable,Monoid,NFData,Data.Semigroup.Semigroup)
+                  deriving (Hashable,Monoid,NFData,Data.Semigroup.Semigroup,Typeable)
 
-#if MIN_VERSION_base(4,8,0)
--- |It exposes a similar 'Data' instance abstraction as 'Text',
--- preserving the @[Char]@ data abstraction at the cost of inefficiency.
+-- | It exposes a similar 'Data' instance abstraction as 'Text' (see
+-- discussion referenced there for more details), preserving the
+-- @[Char]@ data abstraction at the cost of inefficiency.
 --
 -- @since 0.1.3
 instance Data ShortText where
-
   gfoldl f z txt = z fromString `f` (toString txt)
-
-  toConstr _ = mkConstr shortTextDataType "fromString" [] Prefix
-
+  toConstr _ = packConstr
   gunfold k z c = case constrIndex c of
     1 -> k (z fromString)
     _ -> error "gunfold"
-
   dataTypeOf _ = shortTextDataType
-#endif
 
 packConstr :: Constr
 packConstr = mkConstr shortTextDataType "fromString" [] Prefix

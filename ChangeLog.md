@@ -1,6 +1,9 @@
 ## 0.1.3
 
   * Add `Data ShortText` instance
+  * Define `Typeable ShortText` also for GHC 7.8 as well
+    (NB: for GHC 7.10.3 and up `Typeable` instances are automatically
+     defined even when not mentioned explicitly in a `deriving` clause)
 
 ## 0.1.2
 
