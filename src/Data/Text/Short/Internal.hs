@@ -49,6 +49,7 @@ module Data.Text.Short.Internal
 
     , span
     , spanEnd
+    , split
 
     , intersperse
     , intercalate
@@ -352,19 +353,61 @@ findIndex p st = go 0 0
 
     !sz = toB st
 
+
+-- | \(\mathcal{O}(n)\) Splits a string into components delimited by separators,
+-- where the predicate returns True for a separator element.  The
+-- resulting components do not contain the separators.  Two adjacent
+-- separators result in an empty component in the output.  eg.
+--
+-- >>> split (=='a') "aabbaca"
+-- ["","","bb","c",""]
+--
+-- >>> split (=='a') ""
+-- [""]
+--
+-- prop> intercalate (singleton c) (split (== c) t) = t
+--
+-- __NOTE__: 'split' never returns an empty list to match the semantics of its counterpart from "Data.Text".
+--
+-- @since 0.1.3
+split :: (Char -> Bool) -> ShortText -> [ShortText]
+split p st0 = go 0
+  where
+    go !ofs0 = case findOfs' p st0 ofs0 of
+      Just (ofs1,ofs2) -> slice st0 ofs0 (ofs1-ofs0) : go ofs2
+      Nothing
+        | ofs0 == 0 -> st0 : []
+        | otherwise -> slice st0 ofs0 (maxOfs-ofs0) : []
+
+    !maxOfs = toB st0
+
 -- internal helper
 {-# INLINE findOfs #-}
 findOfs :: (Char -> Bool) -> ShortText -> B -> Maybe B
 findOfs p st = go
   where
     go :: B -> Maybe B
-    go !ofs | ofs >= sz  = Nothing
+    go !ofs | ofs >= sz = Nothing
     go !ofs | p c       = Just ofs
             | otherwise = go ofs'
       where
         (c,ofs') = decodeCharAtOfs st ofs
 
     !sz = toB st
+
+{-# INLINE findOfs' #-}
+findOfs' :: (Char -> Bool) -> ShortText -> B -> Maybe (B,B)
+findOfs' p st = go
+  where
+    go :: B -> Maybe (B,B)
+    go !ofs | ofs >= sz = Nothing
+    go !ofs | p c       = Just (ofs,ofs')
+            | otherwise = go ofs'
+      where
+        (c,ofs') = decodeCharAtOfs st ofs
+
+    !sz = toB st
+
 
 {-# INLINE findOfsRev #-}
 findOfsRev :: (Char -> Bool) -> ShortText -> B -> Maybe B
@@ -770,7 +813,7 @@ foreign import ccall unsafe "hs_text_short_index_cp_rev" c_text_short_index_rev 
 
 -- | \(\mathcal{O}(n)\) Split 'ShortText' into two halves.
 --
--- @'splitAtOfs n t@ returns a pair of 'ShortText' with the following properties:
+-- @'splitAt' n t@ returns a pair of 'ShortText' with the following properties:
 --
 -- prop> length (fst (splitAt n t)) == min (length t) (max 0 n)
 --
@@ -829,7 +872,7 @@ splitAtEnd i st
 splitAtOfs :: B -> ShortText -> (ShortText,ShortText)
 splitAtOfs ofs st
   | ofs  == 0    = (mempty,st)
-  | ofs  >  stsz = (st,mempty)
+  | ofs  >= stsz = (st,mempty)
   | otherwise    = (slice st 0 ofs, slice st ofs (stsz-ofs))
   where
     !stsz  = toB st

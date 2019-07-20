@@ -169,7 +169,10 @@ unitTests = testGroup "Unit-tests"
   , testCase "singleton" $ [ c | c <- [minBound..maxBound], IUT.singleton c /= IUT.fromText (T.singleton c) ] @?= []
 
   , testCase "splitAtEnd" $ IUT.splitAtEnd 1 "€€" @?= ("€","€")
-  , testCase "split" $ IUT.split (== 'a') "aabbaca" @?= ["", "", "bb", "c", ""]
+  , testCase "split#1" $ IUT.split (== 'a') "aabbaca" @?= ["", "", "bb", "c", ""]
+  , testCase "split#2" $ IUT.split (const False) "aabbaca" @?= ["aabbaca"]
+  , testCase "split#3" $ IUT.split (const True) "abc" @?= ["","","",""]
+  , testCase "split#4" $ IUT.split (const True) "" @?= [""]
 
   , testCase "literal0" $ IUT.unpack testLit0 @?= []
   , testCase "literal1" $ IUT.unpack testLit1 @?= ['€','\0','€','\0']

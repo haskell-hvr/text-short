@@ -325,30 +325,6 @@ dropWhile p = snd . span p
 dropWhileEnd :: (Char -> Bool) -> ShortText -> ShortText
 dropWhileEnd p = fst . spanEnd p
 
--- | \(\mathcal{O}(n)\) Splits a string into components delimited by separators,
--- where the predicate returns True for a separator element.  The
--- resulting components do not contain the separators.  Two adjacent
--- separators result in an empty component in the output.  eg.
---
--- >>> split (=='a') "aabbaca"
--- ["","","bb","c",""]
---
--- >>> split (=='a') ""
--- [""]
---
--- prop> intercalate (singleton c) (split (== c) t) = t
---
--- __NOTE__: 'split' never returns an empty list to match the semantics of its counterpart from "Data.Text".
---
--- @since 0.1.3
-split :: (Char -> Bool) -> ShortText -> [ShortText]
-split p st0 = loop st0
-  where
-    loop st =
-      let (x, rest) = span (not . p) st
-      in case uncons rest of
-        Nothing -> [st]
-        Just (_, rest') -> x : loop rest'
 
 -- $setup
 -- >>> :set -XOverloadedStrings
