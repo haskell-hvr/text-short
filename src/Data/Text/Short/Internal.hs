@@ -657,9 +657,10 @@ toText = T.decodeUtf8 . toByteString
 --
 -- @since 0.1
 fromString :: String -> ShortText
-fromString []  = mempty
-fromString [c] = singleton c
-fromString s = ShortText . encodeStringShort utf8 . map r $ s
+fromString s = case s of
+  []  -> mempty
+  [c] -> singleton $ r c
+  _   -> ShortText . encodeStringShort utf8 . map r $ s
   where
     r c | isSurr (ord c) = '\xFFFD'
         | otherwise      = c
