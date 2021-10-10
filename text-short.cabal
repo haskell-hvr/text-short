@@ -82,7 +82,9 @@ test-suite tests
   hs-source-dirs:      src-test
   main-is:             Tests.hs
 
+  -- bytestring dependency for cabal_macros.h
   build-depends: base
+               , bytestring
                , binary
                , text
                , text-short
