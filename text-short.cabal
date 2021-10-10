@@ -40,6 +40,9 @@ library
                      , binary      >= 0.7.1  && < 0.9
                      , ghc-prim    >= 0.3.1  && < 0.8
 
+  if impl(ghc >=8.0)
+    build-depends: bytestring >= 0.10.8.0
+
   if !impl(ghc >= 8.0)
      build-depends: semigroups >= 0.18.2 && < 0.20
 
