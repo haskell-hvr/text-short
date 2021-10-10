@@ -1,4 +1,5 @@
 branches: master
+ghcup-jobs: >=9.2
 
 constraint-set bytestring-0.11
   constraints: bytestring ==0.11.*

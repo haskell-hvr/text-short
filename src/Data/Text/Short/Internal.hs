@@ -1292,7 +1292,12 @@ newByteArray (B (I# n#))
 {-# INLINE writeWord8Array #-}
 writeWord8Array :: MBA s -> B -> Word -> ST s ()
 writeWord8Array (MBA# mba#) (B (I# i#)) (W# w#)
-  = ST $ \s -> case GHC.Exts.writeWord8Array# mba# i# w# s of
+  = ST $ \s ->
+#if __GLASGOW_HASKELL__ >= 902
+      case GHC.Exts.writeWord8Array# mba# i# (GHC.Exts.wordToWord8# w#) s of
+#else
+      case GHC.Exts.writeWord8Array# mba# i# w# s of
+#endif
                  s' -> (# s', () #)
 {- not needed yet
 {-# INLINE indexWord8Array #-}
