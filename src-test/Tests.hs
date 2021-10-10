@@ -1,5 +1,11 @@
+{-# LANGUAGE CPP               #-}
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
+
+#ifndef MIN_VERSION_GLASGOW_HASKELL
+#define MIN_VERSION_GLASGOW_HASKELL(x,y,z,w) ((x*100 + y) >= __GLASGOW_HASKELL__)
+#endif
 
 module Main(main) where
 
@@ -164,8 +170,11 @@ unitTests = testGroup "Unit-tests"
   , testCase "IsString U+D800" $ "\xFFFD" @?= (IUT.fromString "\xD800")
 --  , testCase "IsString U+D800" $ (IUT.fromString "\xD800") @?= IUT.fromText ("\xD800" :: T.Text)
 
+#if !(MIN_VERSION_bytestring(0,11,0) && MIN_VERSION_GLASGOW_HASKELL(9,0,1,0) && !MIN_VERSION_GLASGOW_HASKELL(9,0,2,0))
+  -- https://gitlab.haskell.org/ghc/ghc/-/issues/19976
   , testCase "Binary.encode" $ encode ("Hello \8364 & \171581!\NUL" :: IUT.ShortText) @?= "\NUL\NUL\NUL\NUL\NUL\NUL\NUL\DC2Hello \226\130\172 & \240\169\184\189!\NUL"
   , testCase "Binary.decode" $ decode ("\NUL\NUL\NUL\NUL\NUL\NUL\NUL\DC2Hello \226\130\172 & \240\169\184\189!\NUL") @?= ("Hello \8364 & \171581!\NUL" :: IUT.ShortText)
+#endif
   , testCase "singleton" $ [ c | c <- [minBound..maxBound], IUT.singleton c /= IUT.fromText (T.singleton c) ] @?= []
 
   , testCase "splitAtEnd" $ IUT.splitAtEnd 1 "€€" @?= ("€","€")
@@ -188,6 +197,27 @@ unitTests = testGroup "Unit-tests"
   , testCase "literal9"  $ [] @?= ("" :: IUT.ShortText)
   , testCase "literal10" $ ['¤','€','$'] @?= ("¤€$" :: IUT.ShortText)
   , testCase "literal12" $ IUT.unpack ['\xD800','\xD7FF','\xDFFF','\xE000'] @?= ['\xFFFD','\xD7FF','\xFFFD','\xE000']
+
+    -- template haskell
+  , testCase "TH.Lift" $ do
+      testLit1 @?= $([| testLit1 |])
+      testLit2 @?= $([| testLit2 |])
+      testLit3 @?= $([| testLit3 |])
+      testLit4 @?= $([| testLit4 |])
+      testLit5 @?= $([| testLit5 |])
+      testLit6 @?= $([| testLit6 |])
+      testLit7 @?= $([| testLit7 |])
+      testLit8 @?= $([| testLit8 |])
+
+  , testCase "TTH.Lift" $ do
+      testLit1 @?= $$([|| testLit1 ||])
+      testLit2 @?= $$([|| testLit2 ||])
+      testLit3 @?= $$([|| testLit3 ||])
+      testLit4 @?= $$([|| testLit4 ||])
+      testLit5 @?= $$([|| testLit5 ||])
+      testLit6 @?= $$([|| testLit6 ||])
+      testLit7 @?= $$([|| testLit7 ||])
+      testLit8 @?= $$([|| testLit8 ||])
  ]
 
 -- isScalar :: Char -> Bool
