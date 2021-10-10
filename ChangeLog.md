@@ -1,3 +1,8 @@
+## 0.1.4
+
+  * Fix `fromString` for single character strings.
+    https://github.com/haskell-hvr/text-short/issues/20
+
 ## 0.1.3
 
   * Add `Data ShortText` instance
