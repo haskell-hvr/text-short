@@ -10,6 +10,12 @@
 {-# LANGUAGE Unsafe                     #-}
 {-# LANGUAGE ViewPatterns               #-}
 
+#if __GLASGOW_HASKELL__ >= 800
+{-# LANGUAGE TemplateHaskellQuotes #-}
+#else
+{-# LANGUAGE TemplateHaskell #-}
+#endif
+
 -- |
 -- Module      : Data.Text.Short.Internal
 -- Copyright   : © Herbert Valerio Riedel 2017
@@ -141,6 +147,8 @@ import           System.IO.Unsafe
 import           Text.Printf                    (PrintfArg, formatArg,
                                                  formatString)
 
+import qualified Language.Haskell.TH.Syntax     as TH
+
 import qualified PrimOps
 
 -- | A compact representation of Unicode strings.
@@ -238,6 +246,18 @@ instance Binary ShortText where
         case fromByteString bs of
           Nothing -> fail "Binary.get(ShortText): Invalid UTF-8 stream"
           Just st -> return st
+#endif
+
+-- | Since 0.1.3
+instance TH.Lift ShortText where
+    -- TODO: Use DeriveLift with bytestring-0.11.2.0
+    lift t = [| fromString s |]
+      where s = toString t
+
+#if MIN_VERSION_template_haskell(2,17,0)
+    liftTyped = TH.unsafeCodeCoerce . TH.lift
+#elif MIN_VERSION_template_haskell(2,16,0)
+    liftTyped = TH.unsafeTExpCoerce . TH.lift
 #endif
 
 -- | \(\mathcal{O}(1)\) Test whether a 'ShortText' is empty.

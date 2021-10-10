@@ -2,6 +2,7 @@
 
   * Fix `fromString` for single character strings.
     https://github.com/haskell-hvr/text-short/issues/20
+  * Add Template Haskell `Lift ShortText` instance.
 
 ## 0.1.3
 

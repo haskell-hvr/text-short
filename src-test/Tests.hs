@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 module Main(main) where
 
@@ -188,6 +189,27 @@ unitTests = testGroup "Unit-tests"
   , testCase "literal9"  $ [] @?= ("" :: IUT.ShortText)
   , testCase "literal10" $ ['¤','€','$'] @?= ("¤€$" :: IUT.ShortText)
   , testCase "literal12" $ IUT.unpack ['\xD800','\xD7FF','\xDFFF','\xE000'] @?= ['\xFFFD','\xD7FF','\xFFFD','\xE000']
+
+    -- template haskell
+  , testCase "TH.Lift" $ do
+      testLit1 @?= $([| testLit1 |])
+      testLit2 @?= $([| testLit2 |])
+      testLit3 @?= $([| testLit3 |])
+      testLit4 @?= $([| testLit4 |])
+      testLit5 @?= $([| testLit5 |])
+      testLit6 @?= $([| testLit6 |])
+      testLit7 @?= $([| testLit7 |])
+      testLit8 @?= $([| testLit8 |])
+
+  , testCase "TTH.Lift" $ do
+      testLit1 @?= $$([|| testLit1 ||])
+      testLit2 @?= $$([|| testLit2 ||])
+      testLit3 @?= $$([|| testLit3 ||])
+      testLit4 @?= $$([|| testLit4 ||])
+      testLit5 @?= $$([|| testLit5 ||])
+      testLit6 @?= $$([|| testLit6 ||])
+      testLit7 @?= $$([|| testLit7 ||])
+      testLit8 @?= $$([|| testLit8 ||])
  ]
 
 -- isScalar :: Char -> Bool
