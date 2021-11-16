@@ -2,6 +2,7 @@
 {-# LANGUAGE OverloadedLists   #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 #ifndef MIN_VERSION_GLASGOW_HASKELL
 #define MIN_VERSION_GLASGOW_HASKELL(x,y,z,w) ((x*100 + y) >= __GLASGOW_HASKELL__)
@@ -14,11 +15,11 @@ import           Data.Char
 import           Data.Maybe
 import           Data.Monoid
 import qualified Data.String               as D.S
+import qualified Data.ByteString           as BS
 import qualified Data.Text                 as T
 import qualified Data.Text.Encoding        as T
 import qualified Data.Text.Short           as IUT
 import qualified Data.Text.Short.Partial   as IUT
-import           Test.QuickCheck.Instances ()
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           Test.Tasty.QuickCheck     as QC
@@ -259,3 +260,18 @@ testLit7 = "𐌘"
 {-# NOINLINE testLit8 #-}
 testLit8 :: IUT.ShortText
 testLit8 = "\x7f"
+
+-------------------------------------------------------------------------------
+-- orphans
+-------------------------------------------------------------------------------
+
+-- orphan instances to not depend on quickcheck-instances
+-- which would cause cycles
+
+instance Arbitrary BS.ByteString where
+    arbitrary = BS.pack `fmap` arbitrary
+    shrink xs = BS.pack `fmap` shrink (BS.unpack xs)
+
+instance Arbitrary T.Text where
+    arbitrary = T.pack `fmap` arbitrary
+    shrink xs = T.pack `fmap` shrink (T.unpack xs)
