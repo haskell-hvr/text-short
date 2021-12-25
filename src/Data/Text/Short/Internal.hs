@@ -126,7 +126,6 @@ import           Data.Maybe                     (fromMaybe, isNothing)
 import           Data.Semigroup
 import qualified Data.String                    as S
 import qualified Data.Text                      as T
-import qualified Data.Text.Encoding             as T
 import           Foreign.C
 import           GHC.Base                       (assert, unsafeChr)
 import qualified GHC.CString                    as GHC
@@ -148,6 +147,13 @@ import           Text.Printf                    (PrintfArg, formatArg,
                                                  formatString)
 
 import qualified Language.Haskell.TH.Syntax     as TH
+
+#if MIN_VERSION_text(2,0,0)
+import qualified Data.Text.Internal             as TI
+import qualified Data.Text.Array                as TA
+#else
+import qualified Data.Text.Encoding             as T
+#endif
 
 import qualified PrimOps
 
@@ -653,12 +659,16 @@ foldr1 f st
 --
 -- prop> (toText . fromText) t == t
 --
--- This is currently not \(\mathcal{O}(1)\) because currently 'T.Text' uses UTF-16 as its internal representation.
--- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become \(\mathcal{O}(1)\).
+-- This is \(\mathcal{O}(1)\) with @text-2@.
+-- Previously it wasn't because 'T.Text' used UTF-16 as its internal representation.
 --
 -- @since 0.1
 toText :: ShortText -> T.Text
+#if MIN_VERSION_text(2,0,0)
+toText (ShortText (BSSI.SBS ba)) = TI.Text (TA.ByteArray ba) 0 (I# (GHC.Exts.sizeofByteArray# ba))
+#else
 toText = T.decodeUtf8 . toByteString
+#endif
 
 ----
 
@@ -692,7 +702,22 @@ fromString s = case s of
 --
 -- @since 0.1
 fromText :: T.Text -> ShortText
+#if MIN_VERSION_text(2,0,0)
+fromText (TI.Text (TA.ByteArray ba) off len) =
+    ShortText (BSSI.SBS (case sliceByteArray (TA.ByteArray ba) off len of TA.ByteArray ba' -> ba'))
+
+sliceByteArray :: TA.Array -> Int -> Int -> TA.Array
+sliceByteArray ta@(TA.ByteArray ba) 0 len
+    | len == I# (GHC.Exts.sizeofByteArray# ba)
+    = ta
+sliceByteArray ta off len = TA.run $ do
+    ma <- TA.new len
+    TA.copyI len ma 0 ta off
+    return ma
+
+#else
 fromText = fromByteStringUnsafe . T.encodeUtf8
+#endif
 
 -- | \(\mathcal{O}(n)\) Construct 'ShortText' from UTF-8 encoded 'ShortByteString'
 --

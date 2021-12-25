@@ -1,3 +1,7 @@
+## 0.1.5
+
+  * text-2.0 support
+
 ## 0.1.4
 
   * Fix `fromString` for single character strings.
