@@ -165,10 +165,11 @@ import qualified PrimOps
 --
 -- This type relates to 'T.Text' as 'ShortByteString' relates to 'BS.ByteString' by providing a more compact type. Please consult the documentation of "Data.ByteString.Short" for more information.
 --
--- Currently, a boxed unshared 'T.Text' has a memory footprint of 6 words (i.e. 48 bytes on 64-bit systems) plus 2 or 4 bytes per code-point (due to the internal UTF-16 representation). Each 'T.Text' value which can share its payload with another 'T.Text' requires only 4 words additionally. Unlike 'BS.ByteString', 'T.Text' use unpinned memory.
+-- Currently, a boxed unshared 'T.Text' has a memory footprint of 6 words (i.e. 48 bytes on 64-bit systems) plus 1, 2, 3 or 4 bytes per code-point for text-2 (due to the internal UTF-8 representation) or 2 or 4 bytes per  code-point for text-1 (due to the internal UTF-16 representation). Each 'T.Text' value which can share its payload with another 'T.Text' requires only 4 words additionally. Unlike 'BS.ByteString', 'T.Text' use unpinned memory.
 --
 -- In comparison, the footprint of a boxed 'ShortText' is only 4 words (i.e. 32 bytes on 64-bit systems) plus 1, 2, 3, or 4 bytes per code-point (due to the internal UTF-8 representation).
--- It can be shown that for realistic data <http://utf8everywhere.org/#asian UTF-16 has a space overhead of 50% over UTF-8>.
+--
+-- It can be shown that for realistic data <http://utf8everywhere.org/#asian UTF-16, which is used by text-1, has a space overhead of 50% over UTF-8>.
 --
 -- __NOTE__: The `Typeable` instance isn't defined for GHC 7.8 (and older) prior to @text-short-0.1.3@
 --
@@ -697,8 +698,8 @@ fromString s = case s of
 
 -- | \(\mathcal{O}(n)\) Construct 'ShortText' from 'T.Text'
 --
--- This is currently not \(\mathcal{O}(1)\) because currently 'T.Text' uses UTF-16 as its internal representation.
--- In the event that 'T.Text' will change its internal representation to UTF-8 this operation will become \(\mathcal{O}(1)\).
+-- This is \(\mathcal{O}(1)\) with @text-2@ when the 'T.Text' is not sliced.
+-- Previously it wasn't because 'T.Text' used UTF-16 as its internal representation.
 --
 -- @since 0.1
 fromText :: T.Text -> ShortText
