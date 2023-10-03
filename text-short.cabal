@@ -1,7 +1,6 @@
 cabal-version:      1.18
 name:               text-short
-version:            0.1.5
-x-revision:         3
+version:            0.1.5.1
 synopsis:           Memory-efficient representation of Unicode text strings
 license:            BSD3
 license-file:       LICENSE
