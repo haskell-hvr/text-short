@@ -101,10 +101,17 @@ module Data.Text.Short.Internal
     , BS.ByteString
     , T.Text
     , module Prelude
+    , module Data.Monoid
 
       -- ** Internals
     , isValidUtf8
     ) where
+
+import           Prelude
+  (Bool(..), Ordering(..), Int, Char, String, Maybe(..), IO, Eq, Ord, Num, Read,
+   Show, ($), ($!), (.), (==), (/=), (+), (*), (-), (>>), (<=), (<), (>), (>=),
+   compare, show, showsPrec, readsPrec, abs, return, fmap, error,
+   undefined, otherwise, fromIntegral, max, min, not, fst, snd, map, seq, fail, maybe)
 
 import           Control.DeepSeq                (NFData)
 import           Control.Monad.ST               (stToIO)
@@ -123,6 +130,7 @@ import           Data.Hashable                  (Hashable)
 import           Data.Typeable                  (Typeable)
 import qualified Data.List                      as List
 import           Data.Maybe                     (fromMaybe, isNothing)
+import           Data.Monoid                    (Monoid, mempty, mconcat)
 import           Data.Semigroup
 import qualified Data.String                    as S
 import qualified Data.Text                      as T
@@ -136,12 +144,6 @@ import qualified GHC.Exts
 import qualified GHC.Foreign                    as GHC
 import           GHC.IO.Encoding
 import           GHC.ST
-import           Prelude                        hiding (all, any, break, concat,
-                                                 drop, dropWhile, filter, foldl,
-                                                 foldl1, foldr, foldr1, head,
-                                                 init, last, length, null,
-                                                 replicate, reverse, span,
-                                                 splitAt, tail, take, takeWhile)
 import           System.IO.Unsafe
 import           Text.Printf                    (PrintfArg, formatArg,
                                                  formatString)
