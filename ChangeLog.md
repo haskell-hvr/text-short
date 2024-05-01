@@ -1,3 +1,8 @@
+## 0.1.6
+
+  * Drop support for GHC prior 8.6.5
+  * Support GHC-9.10 (base-4.21)
+
 ## 0.1.5
 
   * text-2.0 support
