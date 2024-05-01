@@ -4,17 +4,12 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MagicHash                  #-}
 {-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE TemplateHaskellQuotes      #-}
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE UnboxedTuples              #-}
 {-# LANGUAGE UnliftedFFITypes           #-}
 {-# LANGUAGE Unsafe                     #-}
 {-# LANGUAGE ViewPatterns               #-}
-
-#if __GLASGOW_HASKELL__ >= 800
-{-# LANGUAGE TemplateHaskellQuotes #-}
-#else
-{-# LANGUAGE TemplateHaskell #-}
-#endif
 
 -- |
 -- Module      : Data.Text.Short.Internal
@@ -238,7 +233,6 @@ instance PrintfArg ShortText where
   formatArg txt = formatString $ toString txt
 
 -- | The 'Binary' encoding matches the one for 'T.Text'
-#if MIN_VERSION_binary(0,8,1)
 instance Binary ShortText where
     put = put . toShortByteString
     get = do
@@ -246,16 +240,6 @@ instance Binary ShortText where
         case fromShortByteString sbs of
           Nothing -> fail "Binary.get(ShortText): Invalid UTF-8 stream"
           Just st -> return st
-#else
--- fallback via 'ByteString' instance
-instance Binary ShortText where
-    put = put . toByteString
-    get = do
-        bs <- get
-        case fromByteString bs of
-          Nothing -> fail "Binary.get(ShortText): Invalid UTF-8 stream"
-          Just st -> return st
-#endif
 
 -- | Since 0.1.3
 instance TH.Lift ShortText where
