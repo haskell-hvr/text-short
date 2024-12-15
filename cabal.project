@@ -3,3 +3,8 @@ tests: True
 
 package text-short
   flags: +asserts
+
+if impl (ghc >= 9.12)
+  allow-newer:
+    , hashable:base
+    , splitmix:base
